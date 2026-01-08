@@ -7,7 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.4.7] - 2025-01-19
+## [1.5.0] - 2025-01-08
+
+### Added
+
+- **Developer Analytics API** - 6 new endpoints for developer tools
+  - `ebay_get_rate_limits` - Get application rate limits
+  - `ebay_get_user_rate_limits` - Get user-specific rate limits
+  - `ebay_register_client` - Register third-party financial application (Open Banking/PSD2)
+  - `ebay_get_signing_keys` - Get all signing keys
+  - `ebay_create_signing_key` - Create new signing keypair
+  - `ebay_get_signing_key` - Get specific signing key by ID
+
+- **SKU Location Mapping** - 2 new inventory endpoints
+  - `ebay_create_or_replace_sku_location_mapping` - Map SKU to inventory locations
+  - `ebay_delete_sku_location_mapping` - Remove SKU location mapping
+
+- **Marketing API Enhancement**
+  - `ebay_delete_ads_by_inventory_reference` - Delete ads by inventory reference
+
+- **Communication/Notification Tools** - 25+ new tool definitions
+  - Destination CRUD operations
+  - Subscription management (CRUD, enable, disable, test)
+  - Subscription filters
+  - Topics management
+  - Public key retrieval
+  - Conversation management
+  - Feedback operations
+
+- **Payment Dispute Evidence** - 11 tool handlers wired up
+
+- **GitHub Action: Weekly API Sync** - Automated weekly check for eBay API changes
+  - Runs every Monday at 9:00 AM UTC
+  - Downloads latest OpenAPI specs
+  - Generates coverage report
+  - Creates GitHub issue if new endpoints are detected
+  - Can be triggered manually via workflow_dispatch
+
+- **Unit Tests** - 41 new tests
+  - Developer API tests (25 tests)
+  - SKU Location Mapping tests (14 tests)
+  - Marketing API tests (2 tests)
+
+### Changed
+
+- **Tool Count:** Increased from 275+ to **339 tools**
+- **Test Count:** Increased to **914+ passing tests**
+- **API Coverage:** 82.5% (293 of 355 eBay API endpoints)
+- Updated README with accurate tool counts and descriptions
+
+### Fixed
+
+- Connected payment dispute evidence handlers to tool definitions
+
+## [1.4.6] - 2025-01-19
 
 ### Added
 

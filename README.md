@@ -4,15 +4,15 @@
 
 [![npm version](https://img.shields.io/npm/v/ebay-mcp)](https://www.npmjs.com/package/ebay-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/ebay-mcp)](https://www.npmjs.com/package/ebay-mcp)
-[![Tests](https://img.shields.io/badge/tests-890%2B%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-914%20passing-brightgreen)](tests/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/yosefhayim-ebay-api-mcp-server-badge.png)](https://mseep.ai/app/yosefhayim-ebay-api-mcp-server)
 <a href="https://www.buymeacoffee.com/yosefhayim" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server providing AI assistants with comprehensive access to eBay's Sell APIs. Includes 275+ tools for inventory management, order fulfillment, marketing campaigns, analytics, and more.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server providing AI assistants with comprehensive access to eBay's Sell APIs. Includes **339 tools** for inventory management, order fulfillment, marketing campaigns, analytics, developer tools, and more.
 
-**API Coverage:** 99.1% (~110 of 111 eBay Sell API endpoints)
+**API Coverage:** 82.5% (293 of 355 eBay API endpoints)
 
 </div>
 
@@ -75,12 +75,13 @@ For official eBay API support, please refer to the [eBay Developer Program](http
 
 ## Features
 
-- **275+ eBay API Tools** - Comprehensive coverage of eBay Sell APIs across inventory, orders, marketing, analytics, and more
+- **339 eBay API Tools** - Comprehensive coverage of eBay Sell APIs across inventory, orders, marketing, analytics, developer tools, and more
 - **OAuth 2.0 Support** - Full user token management with automatic refresh
 - **Type Safety** - Built with TypeScript, Zod validation, and OpenAPI-generated types
 - **MCP Integration** - STDIO transport for direct integration with AI assistants
 - **Smart Authentication** - Automatic fallback from user tokens (10k-50k req/day) to client credentials (1k req/day)
-- **Well Tested** - 870+ tests with 99%+ function coverage
+- **Well Tested** - 914+ tests with comprehensive coverage
+- **Developer Analytics** - Rate limit monitoring and signing key management
 
 ## Quick Start
 
@@ -115,13 +116,7 @@ Run the interactive setup wizard:
 npm run setup
 ```
 
-Or manually configure:
-
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-npm run auto-setup
-```
+Or configure manually by copying `.env.example` to `.env` and editing your credentials.
 
 ### 4. Configure MCP Client
 
@@ -284,15 +279,16 @@ Monitor your API usage in the [eBay Developer Portal](https://developer.ebay.com
 
 ## Available Tools
 
-The server provides 275+ tools organized into the following categories:
+The server provides **339 tools** organized into the following categories:
 
 - **Account Management** - Policies, programs, subscriptions, sales tax
-- **Inventory Management** - Items, offers, locations, bulk operations
-- **Order Fulfillment** - Orders, shipping, refunds, disputes
-- **Marketing & Promotions** - Campaigns, ads, promotions, bidding
+- **Inventory Management** - Items, offers, locations, bulk operations, SKU location mapping
+- **Order Fulfillment** - Orders, shipping, refunds, disputes, payment dispute evidence
+- **Marketing & Promotions** - Campaigns, ads, promotions, bidding, bulk operations
 - **Analytics** - Traffic reports, seller standards, metrics
-- **Communication** - Buyer-seller messaging, negotiations
+- **Communication** - Buyer-seller messaging, negotiations, notifications, feedback
 - **Metadata & Taxonomy** - Categories, item aspects, policies
+- **Developer Tools** - Rate limits, signing keys, client registration
 - **Token Management** - OAuth URL generation, token management
 
 **Example Tools:**
@@ -357,103 +353,54 @@ Here are some common tasks you can accomplish with the eBay MCP server:
 - npm or pnpm
 - eBay Developer Account
 
-### Setup
+### Quick Start for Contributors
 
 ```bash
-# Fork and clone the repository
 git clone https://github.com/YOUR_USERNAME/ebay-mcp.git
 cd ebay-mcp
-
-# Install dependencies
 npm install
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# Build and test
+npm run setup      # Interactive setup wizard
 npm run build
 npm test
 ```
 
-### Development Commands
+### Commands Reference
+
+| Command            | Description                                        |
+| ------------------ | -------------------------------------------------- |
+| `npm run build`    | Compile TypeScript to JavaScript                   |
+| `npm start`        | Run the MCP server                                 |
+| `npm run dev`      | Run server with hot reload                         |
+| `npm test`         | Run test suite                                     |
+| `npm run setup`    | Interactive setup wizard                           |
+| `npm run sync`     | Sync specs, generate types, find missing endpoints |
+| `npm run diagnose` | Check configuration and connectivity               |
+| `npm run check`    | Run typecheck + lint + format check                |
+| `npm run fix`      | Auto-fix lint and format issues                    |
+
+### Adding New API Endpoints
+
+When eBay releases new API endpoints, use the sync tool to identify what's missing:
 
 ```bash
-npm run dev              # Run STDIO server
-npm run dev:http         # Run HTTP server
-npm run test             # Run tests
-npm run test:watch       # Run tests in watch mode
-npm run typecheck        # Type-check code
-npm run lint             # Lint code
-npm run format           # Format code
+npm run sync
 ```
 
-### Docker Support
+This single command will:
 
-Run the server in a containerized environment:
+1. Download latest OpenAPI specs from eBay
+2. Generate TypeScript types from specs
+3. Analyze which endpoints are implemented
+4. Report missing endpoints that need tools
 
-```bash
-# Build the Docker image
-npm run docker:build
+**Workflow for adding a new endpoint:**
 
-# Start the container
-npm run docker:up
-
-# View logs
-npm run docker:logs
-
-# Stop the container
-npm run docker:down
-
-# Restart the container
-npm run docker:restart
-```
-
-**Docker Compose Configuration:**
-
-The server can be run with Docker Compose for easy deployment:
-
-```bash
-docker-compose up -d
-```
-
-Environment variables should be configured in `.env` file before running Docker commands. The container will automatically use your `.env` configuration.
-
-**Use Cases for Docker:**
-
-- Production deployments
-- Consistent development environments
-- CI/CD pipelines
-- Isolated testing environments
-
-### HTTP Server Mode
-
-In addition to the default STDIO transport for MCP clients, the server can run in HTTP mode for testing and debugging:
-
-```bash
-# Development
-npm run dev:http
-
-# Production
-npm run start:http
-```
-
-**HTTP Mode Features:**
-
-- RESTful API endpoints for all tools
-- Interactive API documentation
-- Useful for testing tools without an MCP client
-- CORS support for web applications
-- Helmet security headers
-
-**When to Use HTTP Mode:**
-
-- Testing individual tools during development
-- Building custom integrations
-- Debugging API responses
-- Creating web-based interfaces
-
-**Note:** STDIO mode (default) is recommended for MCP client integration (Claude Desktop, etc.). HTTP mode is primarily for development and custom integrations.
+1. Run `npm run sync` to identify missing endpoints
+2. Check `dev-sync-report.json` for the full list
+3. Create a new tool in `src/tools/definitions/`
+4. Add the API method in `src/api/`
+5. Write tests in `tests/`
+6. Run `npm run check && npm test`
 
 ### Project Structure
 
@@ -464,11 +411,20 @@ ebay-mcp/
 │   ├── api/               # eBay API implementations
 │   ├── auth/              # OAuth & token management
 │   ├── tools/             # MCP tool definitions
-│   ├── types/             # TypeScript types
-│   └── utils/             # Validation schemas
+│   ├── types/             # TypeScript types (auto-generated)
+│   ├── scripts/           # CLI tools (setup, sync, diagnose)
+│   └── utils/             # Shared utilities
+├── docs/                  # OpenAPI specs (auto-downloaded)
 ├── tests/                 # Test suite
-├── docs/                  # Documentation
 └── build/                 # Compiled output
+```
+
+### Docker Support
+
+```bash
+docker-compose up -d       # Start container
+docker-compose logs -f     # View logs
+docker-compose down        # Stop container
 ```
 
 For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -541,7 +497,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 1. Verify you're using the correct environment (sandbox vs production)
 2. Ensure you have proper permissions/scopes for the operation
 3. Check eBay API status: https://developer.ebay.com/support/api-status
-4. Run `npm run diagnose:export` to generate a diagnostic report
+4. Run `npm run diagnose` to check your configuration
 5. Review the [eBay API documentation](https://developer.ebay.com/docs) for endpoint requirements
 
 ### Diagnostic Tools
