@@ -2,6 +2,7 @@ import { EbayOAuthClient } from '@/auth/oauth.js';
 import { getBaseUrl } from '@/config/environment.js';
 import type { EbayApiError, EbayConfig } from '@/types/ebay.js';
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import { apiLogger, logRequest, logResponse, logErrorResponse } from '@/utils/logger.js';
 
 // Extended Axios config with retry tracking
 interface AxiosConfigWithRetry extends AxiosRequestConfig {
@@ -85,20 +86,20 @@ export class EbayApiClient {
         // Record the request
         this.rateLimitTracker.recordRequest();
 
-        // Debug logging: Log outgoing request details
-        console.error('\n🔍 [REQUEST DEBUG]');
-        console.error(`  Method: ${config.method?.toUpperCase()}`);
-        console.error(`  URL: ${config.baseURL}${config.url}`);
-        if (config.params && Object.keys(config.params).length > 0) {
-          console.error(`  Query Params: ${JSON.stringify(config.params, null, 2)}`);
-        }
-        if (config.data) {
-          console.error(`  Request Body: ${JSON.stringify(config.data, null, 2)}`);
-        }
+        // Log outgoing request details
+        logRequest(
+          config.method || 'GET',
+          `${config.baseURL}${config.url}`,
+          config.params as Record<string, unknown>,
+          config.data
+        );
 
         return config;
       },
-      (error) => console.error(error)
+      (error) => {
+        apiLogger.error('Request interceptor error', { error: error.message });
+        return Promise.reject(error);
+      }
     );
 
     // Add response interceptor for error handling and retry logic
@@ -108,17 +109,14 @@ export class EbayApiClient {
         const remaining = response.headers['x-ebay-c-ratelimit-remaining'];
         const limit = response.headers['x-ebay-c-ratelimit-limit'];
 
-        // Debug logging: Log response details
-        console.error('\n✅ [RESPONSE DEBUG]');
-        console.error(`  Status: ${response.status} ${response.statusText}`);
-        if (remaining && limit) {
-          console.error(`  Rate Limit: ${remaining}/${limit} remaining`);
-        }
-        if (response.data) {
-          const dataStr = JSON.stringify(response.data, null, 2);
-          const preview = dataStr.length > 500 ? dataStr.substring(0, 500) + '...' : dataStr;
-          console.error(`  Response Data: ${preview}`);
-        }
+        // Log response details
+        logResponse(
+          response.status,
+          response.statusText,
+          response.data,
+          remaining,
+          limit
+        );
 
         return response;
       },
@@ -126,23 +124,20 @@ export class EbayApiClient {
         const axiosError = error;
         const config = axiosError.config as AxiosConfigWithRetry | undefined;
 
-        // Debug logging: Log error response details
+        // Log error response details
         if (axiosError.response) {
-          console.error('\n❌ [ERROR RESPONSE DEBUG]');
-          console.error(
-            `  Status: ${axiosError.response.status} ${axiosError.response.statusText}`
+          logErrorResponse(
+            axiosError.response.status,
+            axiosError.response.statusText,
+            `${config?.baseURL}${config?.url}`,
+            axiosError.response.data
           );
-          console.error(`  URL: ${config?.baseURL}${config?.url}`);
-          if (axiosError.response.data) {
-            console.error(`  Error Data: ${JSON.stringify(axiosError.response.data, null, 2)}`);
-          }
         } else if (axiosError.request) {
-          console.error('\n❌ [NO RESPONSE DEBUG]');
-          console.error(`  Request was made but no response received`);
-          console.error(`  URL: ${config?.baseURL}${config?.url}`);
+          apiLogger.error('No response received from server', {
+            url: `${config?.baseURL}${config?.url}`,
+          });
         } else {
-          console.error('\n❌ [REQUEST ERROR DEBUG]');
-          console.error(`  Error: ${axiosError.message}`);
+          apiLogger.error('Request setup error', { error: axiosError.message });
         }
 
         // Handle authentication errors (401 Unauthorized)
@@ -153,9 +148,7 @@ export class EbayApiClient {
           if (retryCount === 0 && config) {
             config.__authRetryCount = 1;
 
-            console.error(
-              'eBay API authentication error (401). Attempting to refresh user token...'
-            );
+            apiLogger.warn('Authentication error (401). Attempting to refresh user token...');
 
             try {
               // Force token refresh by getting a new access token
@@ -167,12 +160,14 @@ export class EbayApiClient {
                 config.headers.Authorization = `Bearer ${newToken}`;
               }
 
-              console.error('Token refreshed successfully. Retrying request...');
+              apiLogger.info('Token refreshed successfully. Retrying request...');
 
               // Retry the request with the new token
               return await this.httpClient.request(config);
             } catch (refreshError) {
-              console.error('Failed to refresh token:', refreshError);
+              apiLogger.error('Failed to refresh token', {
+                error: refreshError instanceof Error ? refreshError.message : 'Unknown error',
+              });
 
               // If refresh fails, provide clear guidance
               const ebayError = axiosError.response?.data as EbayApiError;
@@ -221,10 +216,10 @@ export class EbayApiClient {
             config.__retryCount = retryCount + 1;
             const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
 
-            console.error(
-              `eBay API server error (${axiosError.response.status}). ` +
-                `Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`
-            );
+            apiLogger.warn(`Server error (${axiosError.response.status}). Retrying...`, {
+              attempt: `${retryCount + 1}/3`,
+              delayMs: Math.min(delay, 5000),
+            });
 
             await new Promise((resolve) => setTimeout(resolve, Math.min(delay, 5000)));
             return await this.httpClient.request(config);
@@ -406,7 +401,7 @@ export class EbayApiClient {
     } catch (error) {
       // Handle 401 authentication errors with automatic token refresh
       if (axios.isAxiosError(error) && error.response?.status === 401) {
-        console.error('eBay API authentication error (401). Attempting to refresh user token...');
+        apiLogger.warn('Authentication error (401) on full URL request. Attempting to refresh user token...');
 
         try {
           // Refresh the token
@@ -415,7 +410,7 @@ export class EbayApiClient {
           // Get the new token
           token = await this.authClient.getAccessToken();
 
-          console.error('Token refreshed successfully. Retrying request...');
+          apiLogger.info('Token refreshed successfully. Retrying request...');
 
           // Retry the request with the new token
           const response = await axios.get<T>(fullUrl, {
@@ -430,7 +425,9 @@ export class EbayApiClient {
 
           return response.data;
         } catch (refreshError) {
-          console.error('Failed to refresh token:', refreshError);
+          apiLogger.error('Failed to refresh token', {
+            error: refreshError instanceof Error ? refreshError.message : 'Unknown error',
+          });
 
           const ebayError = error.response?.data as EbayApiError;
           const originalError =

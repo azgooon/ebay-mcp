@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { EbaySellerApi } from '@/api/index.js';
 import { getEbayConfig, mcpConfig, validateEnvironmentConfig } from '@/config/environment.js';
 import { getToolDefinitions, executeTool } from '@/tools/index.js';
+import { serverLogger, toolLogger, getLogPaths } from '@/utils/logger.js';
 
 /**
  * eBay API MCP Server
@@ -31,6 +32,8 @@ class EbayMcpServer {
   private setupHandlers(): void {
     const tools = getToolDefinitions();
 
+    serverLogger.info(`Registering ${tools.length} tools`);
+
     // Register each tool with the MCP server
     for (const toolDef of tools) {
       this.server.registerTool(
@@ -40,8 +43,10 @@ class EbayMcpServer {
           inputSchema: toolDef.inputSchema,
         },
         async (args: Record<string, unknown>) => {
+          toolLogger.debug(`Executing tool: ${toolDef.name}`, { args });
           try {
             const result = await executeTool(this.api, toolDef.name, args);
+            toolLogger.debug(`Tool ${toolDef.name} completed successfully`);
             return {
               content: [
                 {
@@ -52,6 +57,7 @@ class EbayMcpServer {
             };
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            toolLogger.error(`Tool ${toolDef.name} failed`, { error: errorMessage });
 
             return {
               content: [
@@ -70,46 +76,60 @@ class EbayMcpServer {
 
   private setupErrorHandling(): void {
     process.on('SIGINT', async () => {
+      serverLogger.info('Received SIGINT, shutting down...');
       await this.server.close();
       process.exit(0);
     });
   }
 
   async run(): Promise<void> {
+    serverLogger.info('Starting eBay API MCP Server');
+
     // Validate environment configuration
     const validation = validateEnvironmentConfig();
 
-    // Display warnings
+    // Log warnings
     if (validation.warnings.length > 0) {
-      console.error('\n⚠️  Environment Configuration Warnings:');
       validation.warnings.forEach((warning) => {
-        console.error(`  • ${warning}`);
+        serverLogger.warn(warning);
       });
-      console.error('');
     }
 
-    // Display errors and exit if configuration is invalid
+    // Log errors and exit if configuration is invalid
     if (!validation.isValid) {
-      console.error('\n❌ Environment Configuration Errors:');
       validation.errors.forEach((error) => {
-        console.error(`  • ${error}`);
+        serverLogger.error(error);
       });
-      console.error('\nPlease fix the configuration errors and restart the server.\n');
+      serverLogger.error('Please fix the configuration errors and restart the server.');
       process.exit(1);
     }
 
     // Initialize API (load tokens from storage)
+    serverLogger.info('Initializing API client');
     await this.initialize();
+
+    // Log log file locations if file logging is enabled
+    if (process.env.EBAY_ENABLE_FILE_LOGGING === 'true') {
+      const paths = getLogPaths();
+      serverLogger.info('File logging enabled', {
+        logDir: paths.logDir,
+        errorLog: paths.errorLog,
+        combinedLog: paths.combinedLog,
+      });
+    }
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('eBay API MCP Server running on stdio');
+    serverLogger.info('eBay API MCP Server running on stdio');
   }
 }
 
 // Start the server
 const server = new EbayMcpServer();
 server.run().catch((error) => {
-  console.error('Fatal error running server:', error);
+  serverLogger.error('Fatal error running server', {
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
   process.exit(1);
 });

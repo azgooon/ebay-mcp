@@ -578,11 +578,12 @@ function isClaudeDesktopInstalled(): boolean {
 /**
  * Update Claude Desktop config with eBay MCP server credentials
  * This ensures Claude Desktop has access to the verified tokens
+ * IMPORTANT: This preserves all existing mcpServers and other config
  */
 function updateClaudeDesktopConfig(
   envConfig: Record<string, string>,
   environment: string
-): { success: boolean; configPath: string; error?: string } {
+): { success: boolean; configPath: string; error?: string; details?: string } {
   const configPath = getClaudeDesktopConfigPath();
   const configDir = dirname(configPath);
 
@@ -592,28 +593,30 @@ function updateClaudeDesktopConfig(
   }
 
   try {
-    interface ClaudeConfig {
-      mcpServers?: Record<string, {
-        command: string;
-        args: string[];
-        env?: Record<string, string>;
-      }>;
-      [key: string]: unknown;
-    }
-
-    let existingConfig: ClaudeConfig = {};
+    // Read existing config - preserve everything
+    let existingConfig: Record<string, unknown> = {};
 
     if (existsSync(configPath)) {
       try {
-        existingConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as ClaudeConfig;
-      } catch {
-        existingConfig = {};
+        const fileContent = readFileSync(configPath, 'utf-8');
+        existingConfig = JSON.parse(fileContent) as Record<string, unknown>;
+      } catch (parseError) {
+        // If JSON is invalid, start fresh but warn user
+        return {
+          success: false,
+          configPath,
+          error: `Invalid JSON in config file: ${parseError instanceof Error ? parseError.message : 'Parse error'}`,
+          details: 'Please fix the JSON syntax in your Claude config file',
+        };
       }
     }
 
-    if (!existingConfig.mcpServers) {
+    // Ensure mcpServers exists as an object
+    if (!existingConfig.mcpServers || typeof existingConfig.mcpServers !== 'object') {
       existingConfig.mcpServers = {};
     }
+
+    const mcpServers = existingConfig.mcpServers as Record<string, unknown>;
 
     // Build env object with all credentials
     const envVars: Record<string, string> = {
@@ -632,22 +635,35 @@ function updateClaudeDesktopConfig(
     if (envConfig.EBAY_USER_REFRESH_TOKEN) {
       envVars.EBAY_USER_REFRESH_TOKEN = envConfig.EBAY_USER_REFRESH_TOKEN;
     }
-    if (envConfig.EBAY_USER_ACCESS_TOKEN) {
+    // Only include access tokens if they exist and are not empty
+    if (envConfig.EBAY_USER_ACCESS_TOKEN && envConfig.EBAY_USER_ACCESS_TOKEN.startsWith('v^')) {
       envVars.EBAY_USER_ACCESS_TOKEN = envConfig.EBAY_USER_ACCESS_TOKEN;
     }
-    if (envConfig.EBAY_APP_ACCESS_TOKEN) {
+    if (envConfig.EBAY_APP_ACCESS_TOKEN && envConfig.EBAY_APP_ACCESS_TOKEN.startsWith('v^')) {
       envVars.EBAY_APP_ACCESS_TOKEN = envConfig.EBAY_APP_ACCESS_TOKEN;
     }
 
-    // Update eBay server config with credentials
-    existingConfig.mcpServers['ebay'] = {
+    // Add or update only the 'ebay' server - preserve all other servers
+    mcpServers['ebay'] = {
       command: 'npx',
       args: ['-y', 'ebay-mcp'],
       env: envVars,
     };
 
+    // Write back the complete config with proper formatting
     writeFileSync(configPath, JSON.stringify(existingConfig, null, 2));
-    return { success: true, configPath };
+
+    // Count existing servers for confirmation message
+    const serverCount = Object.keys(mcpServers).length;
+    const otherServers = Object.keys(mcpServers).filter(k => k !== 'ebay');
+
+    return {
+      success: true,
+      configPath,
+      details: otherServers.length > 0
+        ? `Preserved ${otherServers.length} existing server(s): ${otherServers.join(', ')}`
+        : `Added ebay server (${serverCount} total)`,
+    };
   } catch (error) {
     return {
       success: false,
@@ -851,13 +867,23 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
           console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
           const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
           if (claudeResult.success) {
-            showSuccess('Claude Desktop config updated with credentials!');
+            showSuccess('Claude Desktop config updated!');
+            if (claudeResult.details) {
+              showInfo(claudeResult.details);
+            }
             showInfo(`Config: ${claudeResult.configPath}`);
           } else {
-            showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+            showError(`Could not update Claude Desktop: ${claudeResult.error}`);
+            if (claudeResult.details) {
+              showInfo(claudeResult.details);
+            }
           }
+        } else {
+          showInfo('Claude Desktop not detected. You can configure it manually later.');
         }
-        console.log('');
+
+        showKeyboardHints(['Enter: Continue to next step']);
+        await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       } catch (error) {
         const errorMsg = axios.isAxiosError(error)
           ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
@@ -950,14 +976,25 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
           console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
           const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
           if (claudeResult.success) {
-            showSuccess('Claude Desktop config updated with credentials!');
+            showSuccess('Claude Desktop config updated!');
+            if (claudeResult.details) {
+              showInfo(claudeResult.details);
+            }
             showInfo(`Config: ${claudeResult.configPath}`);
           } else {
-            showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+            showError(`Could not update Claude Desktop: ${claudeResult.error}`);
+            if (claudeResult.details) {
+              showInfo(claudeResult.details);
+            }
           }
+        } else {
+          showInfo('Claude Desktop not detected. You can configure it manually later.');
         }
 
         console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!\n');
+
+        showKeyboardHints(['Enter: Continue to next step']);
+        await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       } catch (error) {
         const errorMsg = axios.isAxiosError(error)
           ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
@@ -967,11 +1004,15 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         showError(`Token verification failed: ${errorMsg}`);
         showWarning('The refresh token may be expired or invalid.');
         showInfo('Token saved anyway. You may need to generate a new token if it doesn\'t work.\n');
+
+        showKeyboardHints(['Enter: Continue to next step']);
+        await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       }
     }
   } else if (tokenChoice.method === 'manual') {
     const scopes = [
       'https://api.ebay.com/oauth/api_scope',
+      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
       'https://api.ebay.com/oauth/api_scope/sell.inventory',
       'https://api.ebay.com/oauth/api_scope/sell.marketing',
       'https://api.ebay.com/oauth/api_scope/sell.account',
@@ -1082,17 +1123,28 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
         const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
         if (claudeResult.success) {
-          showSuccess('Claude Desktop config updated with credentials!');
+          showSuccess('Claude Desktop config updated!');
+          if (claudeResult.details) {
+            showInfo(claudeResult.details);
+          }
           showInfo(`Config: ${claudeResult.configPath}`);
         } else {
-          showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+          showError(`Could not update Claude Desktop: ${claudeResult.error}`);
+          if (claudeResult.details) {
+            showInfo(claudeResult.details);
+          }
         }
+      } else {
+        showInfo('Claude Desktop not detected. You can configure it manually later.');
       }
 
       console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!');
       console.log(`  ${ui.dim('Access token expires in:')} ${Math.floor(tokens.expiresIn / 60)} minutes`);
       console.log(`  ${ui.dim('Refresh token expires in:')} ${Math.floor(tokens.refreshTokenExpiresIn / 60 / 60 / 24)} days`);
       console.log(`  ${ui.dim('All tokens will be saved to .env')}\n`);
+
+      showKeyboardHints(['Enter: Continue to next step']);
+      await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
     } catch (error) {
       const errorMsg = axios.isAxiosError(error)
         ? error.response?.data?.error_description || error.message

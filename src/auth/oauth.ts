@@ -9,6 +9,7 @@ import type {
 import { LocaleEnum } from '@/types/ebay-enums.js';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { authLogger } from '@/utils/logger.js';
 
 /**
  * Update .env file with new token values
@@ -64,7 +65,7 @@ export class EbayOAuthClient {
     const locale = this.config?.locale || LocaleEnum.en_US;
 
     if (envRefreshToken) {
-      console.log('📝 Loading refresh token, access token and app to env file...');
+      authLogger.info('Loading tokens from environment variables');
 
       // Create token object with just the refresh token from environment
       // Note: We don't set scopes here - eBay will return the scopes when we refresh
@@ -84,21 +85,17 @@ export class EbayOAuthClient {
       };
 
       // Immediately refresh to get a valid access token and scopes
-      console.log('🔄 Refreshing access token using refresh token from .env...');
+      authLogger.info('Refreshing access token using refresh token from .env');
       try {
         await this.refreshUserToken();
-        console.log('✅ Access token refreshed successfully from .env configuration.');
+        authLogger.info('Access token refreshed successfully');
 
         await this.getOrRefreshAppAccessToken();
       } catch (error) {
-        console.error(
-          '❌ Failed to refresh access token:',
-          error instanceof Error ? error.message : error
-        );
-        console.error('   The EBAY_USER_REFRESH_TOKEN in .env may be invalid or expired.');
-        console.error(
-          '   Please update EBAY_USER_REFRESH_TOKEN or use ebay_set_user_tokens_with_expiry tool.'
-        );
+        authLogger.error('Failed to refresh access token', {
+          error: error instanceof Error ? error.message : String(error),
+          hint: 'The EBAY_USER_REFRESH_TOKEN in .env may be invalid or expired',
+        });
         // Clear invalid tokens
         this.userTokens = null;
       }
@@ -145,13 +142,15 @@ export class EbayOAuthClient {
           await this.refreshUserToken();
           return this.userTokens.userAccessToken;
         } catch (error) {
-          console.error('Failed to refresh user token, falling back to app access token:', error);
+          authLogger.error('Failed to refresh user token, falling back to app access token', {
+            error: error instanceof Error ? error.message : String(error),
+          });
           // Clear invalid tokens
           this.userTokens = null;
         }
       } else {
         // Refresh token expired
-        console.error('User refresh token expired. User needs to re-authorize.');
+        authLogger.error('User refresh token expired. User needs to re-authorize.');
         this.userTokens = null;
         throw new Error(
           'User authorization expired. Please update EBAY_USER_REFRESH_TOKEN in .env with a new refresh token.'

@@ -105,6 +105,7 @@ For official eBay API support, please refer to the [eBay Developer Program](http
 - [Usage Examples](#usage-examples)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Logging](#logging)
 - [Troubleshooting](#troubleshooting)
 - [Resources](#resources)
 - [License](#license)
@@ -545,6 +546,43 @@ Contributions are welcome! Here's how to get started:
 - Maintain test coverage
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+## Logging
+
+The server includes Winston-based logging for easier debugging. Logs are output to stderr (compatible with MCP protocol) and optionally to files.
+
+### Log Levels
+
+Set the log level via environment variable:
+
+```bash
+EBAY_LOG_LEVEL=debug  # Options: error, warn, info, http, verbose, debug, silly
+```
+
+### File Logging
+
+Enable file logging for persistent logs:
+
+```bash
+EBAY_ENABLE_FILE_LOGGING=true
+```
+
+Log files are stored in `~/.ebay-mcp/logs/`:
+- `error.log` - Error-level messages only
+- `combined.log` - All log messages
+- `debug.log` - Debug and verbose messages
+
+### Log Output Example
+
+```
+[2024-01-15 10:30:45] [INFO] [Server] Starting eBay API MCP Server
+[2024-01-15 10:30:45] [INFO] [Auth] Loading tokens from environment variables
+[2024-01-15 10:30:46] [INFO] [Auth] Access token refreshed successfully
+[2024-01-15 10:30:46] [HTTP] [API] Request: GET https://api.ebay.com/sell/inventory/v1/inventory_item
+[2024-01-15 10:30:47] [HTTP] [API] Response: 200 OK
+```
+
+---
 
 ## Troubleshooting
 
