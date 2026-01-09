@@ -550,6 +550,113 @@ function configureLLMClient(client: LLMClient, projectRoot: string): boolean {
   }
 }
 
+/**
+ * Get Claude Desktop config path for the current platform
+ */
+function getClaudeDesktopConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  if (os === 'darwin') {
+    return join(home, 'Library/Application Support/Claude/claude_desktop_config.json');
+  } else if (os === 'win32') {
+    return join(home, 'AppData/Roaming/Claude/claude_desktop_config.json');
+  } else {
+    return join(home, '.config/Claude/claude_desktop_config.json');
+  }
+}
+
+/**
+ * Check if Claude Desktop is installed
+ */
+function isClaudeDesktopInstalled(): boolean {
+  const configPath = getClaudeDesktopConfigPath();
+  const configDir = dirname(configPath);
+  return existsSync(configDir);
+}
+
+/**
+ * Update Claude Desktop config with eBay MCP server credentials
+ * This ensures Claude Desktop has access to the verified tokens
+ */
+function updateClaudeDesktopConfig(
+  envConfig: Record<string, string>,
+  environment: string
+): { success: boolean; configPath: string; error?: string } {
+  const configPath = getClaudeDesktopConfigPath();
+  const configDir = dirname(configPath);
+
+  // Check if Claude Desktop is installed
+  if (!existsSync(configDir)) {
+    return { success: false, configPath, error: 'Claude Desktop not installed' };
+  }
+
+  try {
+    interface ClaudeConfig {
+      mcpServers?: Record<string, {
+        command: string;
+        args: string[];
+        env?: Record<string, string>;
+      }>;
+      [key: string]: unknown;
+    }
+
+    let existingConfig: ClaudeConfig = {};
+
+    if (existsSync(configPath)) {
+      try {
+        existingConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as ClaudeConfig;
+      } catch {
+        existingConfig = {};
+      }
+    }
+
+    if (!existingConfig.mcpServers) {
+      existingConfig.mcpServers = {};
+    }
+
+    // Build env object with all credentials
+    const envVars: Record<string, string> = {
+      EBAY_ENVIRONMENT: environment,
+    };
+
+    if (envConfig.EBAY_CLIENT_ID) {
+      envVars.EBAY_CLIENT_ID = envConfig.EBAY_CLIENT_ID;
+    }
+    if (envConfig.EBAY_CLIENT_SECRET) {
+      envVars.EBAY_CLIENT_SECRET = envConfig.EBAY_CLIENT_SECRET;
+    }
+    if (envConfig.EBAY_REDIRECT_URI) {
+      envVars.EBAY_REDIRECT_URI = envConfig.EBAY_REDIRECT_URI;
+    }
+    if (envConfig.EBAY_USER_REFRESH_TOKEN) {
+      envVars.EBAY_USER_REFRESH_TOKEN = envConfig.EBAY_USER_REFRESH_TOKEN;
+    }
+    if (envConfig.EBAY_USER_ACCESS_TOKEN) {
+      envVars.EBAY_USER_ACCESS_TOKEN = envConfig.EBAY_USER_ACCESS_TOKEN;
+    }
+    if (envConfig.EBAY_APP_ACCESS_TOKEN) {
+      envVars.EBAY_APP_ACCESS_TOKEN = envConfig.EBAY_APP_ACCESS_TOKEN;
+    }
+
+    // Update eBay server config with credentials
+    existingConfig.mcpServers['ebay'] = {
+      command: 'npx',
+      args: ['-y', 'ebay-mcp'],
+      env: envVars,
+    };
+
+    writeFileSync(configPath, JSON.stringify(existingConfig, null, 2));
+    return { success: true, configPath };
+  } catch (error) {
+    return {
+      success: false,
+      configPath,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 function loadExistingConfig(): Record<string, string> {
   const envPath = join(PROJECT_ROOT, '.env');
   const envConfig: Record<string, string> = {};
@@ -726,7 +833,57 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
     });
 
     if (keepToken.keep) {
-      return true;
+      // Verify the existing token works by fetching user info
+      console.log('\n  ' + ui.info('Verifying existing refresh token...'));
+      try {
+        const { accessToken, userInfo } = await verifyRefreshToken(
+          state.config.EBAY_USER_REFRESH_TOKEN,
+          state.config.EBAY_CLIENT_ID,
+          state.config.EBAY_CLIENT_SECRET,
+          state.environment
+        );
+        showSuccess('Refresh token verified successfully!');
+        state.config.EBAY_USER_ACCESS_TOKEN = accessToken;
+        displayUserInfo(userInfo);
+
+        // Update Claude Desktop config if installed
+        if (isClaudeDesktopInstalled()) {
+          console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
+          const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
+          if (claudeResult.success) {
+            showSuccess('Claude Desktop config updated with credentials!');
+            showInfo(`Config: ${claudeResult.configPath}`);
+          } else {
+            showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+          }
+        }
+        console.log('');
+      } catch (error) {
+        const errorMsg = axios.isAxiosError(error)
+          ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error';
+        showError(`Token verification failed: ${errorMsg}`);
+        showWarning('Your existing refresh token may be expired or invalid.');
+
+        const continueAnyway = await prompts({
+          type: 'confirm',
+          name: 'continue',
+          message: 'Would you like to set up a new OAuth token?',
+          initial: true,
+        });
+
+        if (!continueAnyway.continue) {
+          showInfo('Keeping existing token. You may need to re-authenticate if it doesn\'t work.');
+          return true;
+        }
+        // Fall through to OAuth setup options
+      }
+
+      if (state.config.EBAY_USER_ACCESS_TOKEN) {
+        return true;
+      }
     }
   }
 
@@ -758,8 +915,59 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
     });
 
     if (tokenInput.token) {
-      state.config.EBAY_USER_REFRESH_TOKEN = tokenInput.token.trim().replace(/^["']|["']$/g, '');
-      showSuccess('Refresh token saved!');
+      const cleanToken = tokenInput.token.trim().replace(/^["']|["']$/g, '');
+      state.config.EBAY_USER_REFRESH_TOKEN = cleanToken;
+
+      // Verify the pasted token works
+      console.log('\n  ' + ui.info('Verifying refresh token...'));
+      try {
+        const { accessToken, userInfo } = await verifyRefreshToken(
+          cleanToken,
+          state.config.EBAY_CLIENT_ID,
+          state.config.EBAY_CLIENT_SECRET,
+          state.environment
+        );
+        showSuccess('Refresh token verified successfully!');
+        state.config.EBAY_USER_ACCESS_TOKEN = accessToken;
+        displayUserInfo(userInfo);
+
+        // Get app access token too
+        console.log('  ' + ui.info('Getting app access token...'));
+        try {
+          const appToken = await getAppAccessToken(
+            state.config.EBAY_CLIENT_ID,
+            state.config.EBAY_CLIENT_SECRET,
+            state.environment
+          );
+          state.config.EBAY_APP_ACCESS_TOKEN = appToken;
+          showSuccess('App access token obtained!');
+        } catch {
+          showWarning('Could not get app access token (user tokens will still work).');
+        }
+
+        // Update Claude Desktop config if installed
+        if (isClaudeDesktopInstalled()) {
+          console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
+          const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
+          if (claudeResult.success) {
+            showSuccess('Claude Desktop config updated with credentials!');
+            showInfo(`Config: ${claudeResult.configPath}`);
+          } else {
+            showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+          }
+        }
+
+        console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!\n');
+      } catch (error) {
+        const errorMsg = axios.isAxiosError(error)
+          ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error';
+        showError(`Token verification failed: ${errorMsg}`);
+        showWarning('The refresh token may be expired or invalid.');
+        showInfo('Token saved anyway. You may need to generate a new token if it doesn\'t work.\n');
+      }
     }
   } else if (tokenChoice.method === 'manual') {
     const scopes = [
@@ -867,6 +1075,18 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         showSuccess('App access token obtained!');
       } catch {
         showWarning('Could not get app access token (user tokens will still work).');
+      }
+
+      // Update Claude Desktop config if installed
+      if (isClaudeDesktopInstalled()) {
+        console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
+        const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
+        if (claudeResult.success) {
+          showSuccess('Claude Desktop config updated with credentials!');
+          showInfo(`Config: ${claudeResult.configPath}`);
+        } else {
+          showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+        }
       }
 
       console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!');
