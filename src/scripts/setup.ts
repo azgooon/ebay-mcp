@@ -699,11 +699,26 @@ function loadExistingConfig(): Record<string, string> {
   return envConfig;
 }
 
+function formatDate(date: Date): string {
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  };
+  return date.toLocaleString('en-US', options);
+}
+
 function saveConfig(envConfig: Record<string, string>, environment: string): void {
   const envPath = join(PROJECT_ROOT, '.env');
+  const now = new Date();
 
   const content = `# eBay MCP Server Configuration
-# Generated: ${new Date().toISOString()}
+# Last Updated: ${formatDate(now)}
 # Environment: ${environment}
 
 EBAY_CLIENT_ID=${envConfig.EBAY_CLIENT_ID || ''}
