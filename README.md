@@ -148,15 +148,19 @@ npm install
 npm run build
 ```
 
-### 3. Configure
+### 3. Run Setup Wizard
 
-Run the interactive setup wizard:
+The interactive setup wizard handles everything for you:
 
 ```bash
 npm run setup
 ```
 
-Or configure manually by copying `.env.example` to `.env` and editing your credentials.
+The wizard will:
+- Configure your eBay credentials
+- Set up OAuth authentication (for higher rate limits)
+- Auto-detect and configure your MCP client (Claude Desktop, etc.)
+- Save all configuration automatically
 
 ---
 
@@ -170,108 +174,39 @@ https://github.com/user-attachments/assets/0173c8df-221c-4943-a4ce-cd20bce79f4b
 
 ## Visual Setup Guide
 
-Follow these steps to configure OAuth authentication for higher rate limits (10k-50k requests/day):
+The setup wizard (`npm run setup`) handles OAuth authentication automatically. Here's where to find your credentials in the eBay Developer Portal:
 
-### Step 1: Copy Client ID and Client Secret
+### Finding Your Credentials
 
-Navigate to the [eBay Developer Portal](https://developer.ebay.com/my/keys) and copy your **App ID (Client ID)** and **Cert ID (Client Secret)** from either Sandbox or Production environment.
+**Step 1:** Navigate to [eBay Developer Portal](https://developer.ebay.com/my/keys) and copy your **App ID (Client ID)** and **Cert ID (Client Secret)**:
 
 ![Step 1 - Copy credentials from eBay Developer Portal](public/screenshot-guides/STEP%20-%201%20-%20COPY%20CLIENT%20ID%20AND%20CLIENT%20SECRET%20TO%20ENV%20FILE.png)
 
-Add these credentials to your `.env` file:
-```bash
-EBAY_CLIENT_ID=your_app_id_here
-EBAY_CLIENT_SECRET=your_cert_id_here
-EBAY_ENVIRONMENT=sandbox  # or "production"
-```
-
-### Step 2: Copy Your Redirect URL (RuName)
-
-In the Developer Portal, go to your application's **User Tokens** settings and copy the **RuName** (eBay Redirect URL). This is required for OAuth authentication.
+**Step 2:** In your app's **User Tokens** settings, copy the **RuName** (eBay Redirect URL):
 
 ![Step 2 - Copy RuName from eBay Sign-in Settings](public/screenshot-guides/STEP%20-%202%20-%20COPY%20REDIRECT%20URL.png)
 
-Add the RuName to your `.env` file:
-```bash
-EBAY_REDIRECT_URI=your_runame_here
-```
+### Running the Setup Wizard
 
-### Step 3: Run Setup and Complete OAuth Login
+Run `npm run setup` and enter your credentials when prompted. The wizard will:
 
-Run the setup wizard which will open your browser automatically:
-
-```bash
-npm run setup
-```
-
-Sign in to your eBay account when prompted to authorize the application.
+1. Open your browser for OAuth login automatically
+2. Guide you through the eBay sign-in process
 
 ![Step 3 - Sign in to eBay during OAuth flow](public/screenshot-guides/STEP%203%20-%20RUN%20COMMAND%20NPM%20RUN%20SETUP%20AND%20PREFORM%20OAUTH%20LOGIN.png)
 
-### Step 4: Paste the Authorization Code
-
-After granting permissions, you'll be redirected to a URL containing an authorization code. Copy the **code** parameter from the URL and paste it into the setup wizard terminal.
+3. Ask you to paste the authorization code from the callback URL
 
 ![Step 4 - Paste authorization code into setup wizard](public/screenshot-guides/STEP%20-%204%20-%20PASTE%20INTO%20THE%20SETUP%20WIZARD.png)
 
-The setup wizard will automatically exchange the code for tokens and save your refresh token to the `.env` file.
+4. Exchange the code for tokens and save them automatically
+5. Configure your MCP client (Claude Desktop, etc.)
 
 **Success!** You now have user token authentication with 10k-50k requests/day instead of the default 1k/day.
 
 ---
 
-### 4. Configure MCP Client
-
-Add this server to your MCP client configuration:
-
-**Claude Desktop:**
-
-Edit your Claude Desktop config file:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-- Linux: `~/.config/Claude/claude_desktop_config.json`
-
-Add the server configuration:
-
-```json
-{
-  "mcpServers": {
-    "ebay": {
-      "command": "npx",
-      "args": ["-y", "ebay-mcp"],
-      "env": {
-        "EBAY_CLIENT_ID": "your_client_id",
-        "EBAY_CLIENT_SECRET": "your_client_secret",
-        "EBAY_ENVIRONMENT": "sandbox",
-        "EBAY_REDIRECT_URI": "your_runame"
-      }
-    }
-  }
-}
-```
-
-**Alternative: Use locally installed version**
-
-If you installed from source:
-
-```json
-{
-  "mcpServers": {
-    "ebay": {
-      "command": "node",
-      "args": ["/absolute/path/to/ebay-mcp/build/index.js"],
-      "env": {
-        "EBAY_CLIENT_ID": "your_client_id",
-        "EBAY_CLIENT_SECRET": "your_client_secret",
-        "EBAY_ENVIRONMENT": "sandbox"
-      }
-    }
-  }
-}
-```
-
-### 5. Use
+### 4. Use
 
 Restart your MCP client (Claude Desktop, etc.) and start using eBay tools through your AI assistant.
 
@@ -281,32 +216,21 @@ Restart your MCP client (Claude Desktop, etc.) and start using eBay tools throug
 
 ### Environment Variables
 
-Create a `.env` file with your eBay credentials:
+The setup wizard (`npm run setup`) automatically creates and configures your `.env` file. For reference, these are the environment variables used:
 
 ```bash
 EBAY_CLIENT_ID=your_client_id
 EBAY_CLIENT_SECRET=your_client_secret
 EBAY_ENVIRONMENT=sandbox  # or "production"
 EBAY_REDIRECT_URI=your_runame
-
-# Optional: For higher rate limits (10k-50k req/day)
-EBAY_USER_REFRESH_TOKEN=your_refresh_token
+EBAY_USER_REFRESH_TOKEN=your_refresh_token  # For higher rate limits
 ```
 
 ### OAuth Authentication
 
-**Client Credentials (Automatic):**
+**Client Credentials (Default):** 1,000 requests/day - works automatically with just Client ID and Secret.
 
-- Default authentication method
-- 1,000 requests/day
-- No setup required beyond client ID and secret
-
-**User Tokens (Recommended for Production):**
-
-- 10,000-50,000 requests/day
-- Use `ebay_get_oauth_url` tool to generate authorization URL
-- Add `EBAY_USER_REFRESH_TOKEN` to `.env` after OAuth flow
-- Tokens refresh automatically
+**User Tokens (Recommended):** 10,000-50,000 requests/day - the setup wizard handles the OAuth flow automatically. Tokens refresh automatically.
 
 For detailed OAuth setup and comprehensive configuration guide, see the [Configuration Documentation](docs/auth/CONFIGURATION.md).
 
