@@ -276,8 +276,168 @@ function camelToSnake(str: string): string {
     .replace(/^_/, '');
 }
 
-function normalizeToolName(name: string): string {
+function normalizeForMatching(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Known mappings from OpenAPI operationId to our tool names
+ * This handles cases where naming conventions differ significantly
+ */
+const KNOWN_OPERATION_MAPPINGS: Record<string, string[]> = {
+  // Feedback API
+  getitemsawaitingfeedback: ['ebay_get_awaiting_feedback'],
+  leavefeedback: ['ebay_leave_feedback_for_buyer'],
+
+  // Notification API
+  getconfig: ['ebay_get_notification_config'],
+  updateconfig: ['ebay_update_notification_config'],
+  getdestinations: ['ebay_get_destinations'],
+  createdestination: ['ebay_create_destination'],
+  getdestination: ['ebay_get_destination'],
+  updatedestination: ['ebay_update_destination'],
+  deletedestination: ['ebay_delete_destination'],
+  getsubscriptions: ['ebay_get_subscriptions'],
+  createsubscription: ['ebay_create_subscription'],
+  getsubscription: ['ebay_get_subscription'],
+  updatesubscription: ['ebay_update_subscription'],
+  deletesubscription: ['ebay_delete_subscription'],
+  disablesubscription: ['ebay_disable_subscription'],
+  enablesubscription: ['ebay_enable_subscription'],
+  testsubscription: ['ebay_test_subscription'],
+  createsubscriptionfilter: ['ebay_create_subscription_filter'],
+  getsubscriptionfilter: ['ebay_get_subscription_filter'],
+  deletesubscriptionfilter: ['ebay_delete_subscription_filter'],
+  gettopic: ['ebay_get_topic'],
+  gettopics: ['ebay_get_topics'],
+  getpublickey: ['ebay_get_public_key'],
+
+  // Negotiation API
+  findeligibleitems: ['ebay_find_eligible_items'],
+
+  // Inventory API
+  createorreplaceinventoryitem: ['ebay_create_or_update_inventory_item', 'ebay_create_inventory_item'],
+  getskulocationmapping: ['ebay_get_listing_locations'],
+  createinventorylocation: ['ebay_create_or_replace_inventory_location', 'ebay_create_inventory_location'],
+  updateinventorylocation: ['ebay_update_location_details'],
+
+  // Marketing API
+  createadbylistingid: ['ebay_create_ad'],
+  updatebid: ['ebay_update_bid', 'ebay_update_bidding_strategy'],
+  bulkcreatekeyword: ['ebay_bulk_create_keywords'],
+  bulkupdatekeyword: ['ebay_bulk_update_keyword_bids'],
+  bulkcreatenegativekeyword: ['ebay_bulk_create_negative_keywords'],
+  bulkupdatenegativekeyword: ['ebay_bulk_update_negative_keywords'],
+  getnegativekeywords: ['ebay_get_negative_keywords'],
+  createnegativekeyword: ['ebay_create_negative_keyword'],
+  getnegativekeyword: ['ebay_get_negative_keyword'],
+  updatenegativekeyword: ['ebay_update_negative_keyword'],
+  getreportmetadata: ['ebay_get_ad_report_metadata'],
+  getreportmetadataforreporttype: ['ebay_get_ad_report_metadata_for_report_type', 'ebay_get_ad_report_metadata_for_type'],
+  getpromotionreports: ['ebay_get_promotion_report', 'ebay_get_promotion_reports'],
+  getaudiences: ['ebay_get_audiences'],
+
+  // Dispute/Fulfillment API
+  fetchevidencecontent: ['ebay_fetch_evidence_content'],
+  getactivities: ['ebay_get_payment_dispute_activities', 'ebay_get_activities'],
+  uploadevidencefile: ['ebay_upload_evidence_file'],
+  addevidence: ['ebay_add_evidence'],
+  updateevidence: ['ebay_update_evidence'],
+
+  // Logistics/eDelivery API
+  getpackagesbylineitemid: ['ebay_get_package_by_order_line_item'],
+  getservices: ['ebay_get_shipping_services', 'ebay_get_services'],
+};
+
+/**
+ * Get all implemented API methods from source files
+ */
+function getImplementedApiMethods(): Set<string> {
+  const methods = new Set<string>();
+  const apiDir = join(PROJECT_ROOT, 'src/api');
+
+  function processDirectory(dir: string): void {
+    if (!existsSync(dir)) return;
+
+    const entries = readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        processDirectory(fullPath);
+      } else if (entry.name.endsWith('.ts')) {
+        try {
+          const content = readFileSync(fullPath, 'utf-8');
+          // Match async method definitions
+          const methodMatches = content.matchAll(/async\s+(\w+)\s*\(/g);
+          for (const match of methodMatches) {
+            methods.add(normalizeForMatching(match[1]));
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+
+  processDirectory(apiDir);
+  return methods;
+}
+
+/**
+ * Generate all possible name variations for an operationId
+ */
+function generateNameVariations(opId: string): string[] {
+  const variations: string[] = [];
+  const normalized = normalizeForMatching(opId);
+
+  // Direct variations
+  variations.push(normalized);
+  variations.push(`ebay${normalized}`);
+  variations.push(normalizeForMatching(`ebay_${camelToSnake(opId)}`));
+  variations.push(normalizeForMatching(camelToSnake(opId)));
+
+  // Remove common suffixes/prefixes that might differ
+  const withoutItems = normalized.replace(/items?$/, '');
+  if (withoutItems !== normalized) {
+    variations.push(withoutItems);
+    variations.push(`ebay${withoutItems}`);
+  }
+
+  // Handle "ByX" patterns -> remove them
+  const withoutBy = normalized.replace(/by\w+$/, '');
+  if (withoutBy !== normalized) {
+    variations.push(withoutBy);
+    variations.push(`ebay${withoutBy}`);
+  }
+
+  // Handle "ForX" patterns -> remove them
+  const withoutFor = normalized.replace(/for\w+$/, '');
+  if (withoutFor !== normalized) {
+    variations.push(withoutFor);
+    variations.push(`ebay${withoutFor}`);
+  }
+
+  // Handle plural/singular
+  if (normalized.endsWith('s') && !normalized.endsWith('ss')) {
+    const singular = normalized.slice(0, -1);
+    variations.push(singular);
+    variations.push(`ebay${singular}`);
+  } else {
+    const plural = normalized + 's';
+    variations.push(plural);
+    variations.push(`ebay${plural}`);
+  }
+
+  // Check known mappings
+  if (KNOWN_OPERATION_MAPPINGS[normalized]) {
+    for (const mapped of KNOWN_OPERATION_MAPPINGS[normalized]) {
+      variations.push(normalizeForMatching(mapped));
+    }
+  }
+
+  return [...new Set(variations)];
 }
 
 function analyzeEndpoints(): { total: number; implemented: number; missing: EndpointInfo[] } {
@@ -285,25 +445,34 @@ function analyzeEndpoints(): { total: number; implemented: number; missing: Endp
 
   const specEndpoints = extractEndpointsFromSpecs();
   const implementedTools = getImplementedTools();
+  const implementedApiMethods = getImplementedApiMethods();
 
-  const normalizedTools = new Set(Array.from(implementedTools).map((t) => normalizeToolName(t)));
+  // Normalize all tool names
+  const normalizedTools = new Set(Array.from(implementedTools).map((t) => normalizeForMatching(t)));
+
+  // Combine tools and API methods for matching
+  const allImplemented = new Set([...normalizedTools, ...implementedApiMethods]);
+
+  // Track unique endpoints (dedupe by operationId)
+  const seenOperationIds = new Set<string>();
+  const uniqueEndpoints: EndpointInfo[] = [];
+
+  for (const endpoint of specEndpoints) {
+    const normalizedOpId = normalizeForMatching(endpoint.operationId);
+    if (!seenOperationIds.has(normalizedOpId)) {
+      seenOperationIds.add(normalizedOpId);
+      uniqueEndpoints.push(endpoint);
+    }
+  }
 
   const missing: EndpointInfo[] = [];
   let matchedCount = 0;
 
-  for (const endpoint of specEndpoints) {
+  for (const endpoint of uniqueEndpoints) {
     const opId = endpoint.operationId;
+    const variations = generateNameVariations(opId);
 
-    const possibleNames = [
-      `ebay_${camelToSnake(opId)}`,
-      `ebay${opId.toLowerCase()}`,
-      camelToSnake(opId),
-      opId.toLowerCase(),
-    ];
-
-    const normalizedPossible = possibleNames.map((n) => normalizeToolName(n));
-
-    const isImplemented = normalizedPossible.some((name) => normalizedTools.has(name));
+    const isImplemented = variations.some((name) => allImplemented.has(name));
 
     if (isImplemented) {
       matchedCount++;
@@ -313,15 +482,17 @@ function analyzeEndpoints(): { total: number; implemented: number; missing: Endp
   }
 
   const coveragePercent =
-    specEndpoints.length > 0 ? ((matchedCount / specEndpoints.length) * 100).toFixed(1) : '0';
+    uniqueEndpoints.length > 0 ? ((matchedCount / uniqueEndpoints.length) * 100).toFixed(1) : '0';
 
-  console.log(`  ${ui.info('Total endpoints in specs:')} ${specEndpoints.length}`);
+  console.log(`  ${ui.info('Total unique endpoints in specs:')} ${uniqueEndpoints.length}`);
+  console.log(`  ${ui.info('(Raw count with duplicates:')} ${specEndpoints.length}${ui.info(')')}`);
   console.log(`  ${ui.success('Tools implemented:')} ${implementedTools.size}`);
+  console.log(`  ${ui.success('API methods found:')} ${implementedApiMethods.size}`);
   console.log(`  ${ui.success('Endpoints covered:')} ${matchedCount} (${coveragePercent}%)`);
   console.log(`  ${ui.warning('Potentially missing:')} ${missing.length}`);
 
   return {
-    total: specEndpoints.length,
+    total: uniqueEndpoints.length,
     implemented: matchedCount,
     missing,
   };
