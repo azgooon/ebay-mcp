@@ -97,6 +97,128 @@ function getContinueConfigPath(): string {
 }
 
 /**
+ * Get config path for Zed editor
+ */
+function getZedConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  switch (os) {
+    case 'darwin':
+      return join(home, '.config', 'zed', 'settings.json');
+    case 'win32':
+      return join(home, 'AppData', 'Roaming', 'Zed', 'settings.json');
+    default:
+      return join(home, '.config', 'zed', 'settings.json');
+  }
+}
+
+/**
+ * Get config path for Cursor IDE
+ */
+function getCursorConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  switch (os) {
+    case 'darwin':
+      return join(home, '.cursor', 'mcp.json');
+    case 'win32':
+      return join(home, '.cursor', 'mcp.json');
+    default:
+      return join(home, '.cursor', 'mcp.json');
+  }
+}
+
+/**
+ * Get config path for Windsurf (Codeium)
+ */
+function getWindsurfConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  switch (os) {
+    case 'darwin':
+      return join(home, '.codeium', 'windsurf', 'mcp_config.json');
+    case 'win32':
+      return join(home, '.codeium', 'windsurf', 'mcp_config.json');
+    default:
+      return join(home, '.codeium', 'windsurf', 'mcp_config.json');
+  }
+}
+
+/**
+ * Get config path for Roo Code (VSCode extension)
+ */
+function getRooCodeConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  switch (os) {
+    case 'darwin':
+      return join(
+        home,
+        'Library',
+        'Application Support',
+        'Code',
+        'User',
+        'globalStorage',
+        'rooveterinaryinc.roo-cline',
+        'settings',
+        'mcp_settings.json'
+      );
+    case 'win32':
+      return join(
+        home,
+        'AppData',
+        'Roaming',
+        'Code',
+        'User',
+        'globalStorage',
+        'rooveterinaryinc.roo-cline',
+        'settings',
+        'mcp_settings.json'
+      );
+    default:
+      return join(
+        home,
+        '.config',
+        'Code',
+        'User',
+        'globalStorage',
+        'rooveterinaryinc.roo-cline',
+        'settings',
+        'mcp_settings.json'
+      );
+  }
+}
+
+/**
+ * Get config path for Claude Code CLI
+ */
+function getClaudeCodeConfigPath(): string {
+  const home = homedir();
+  return join(home, '.claude.json');
+}
+
+/**
+ * Get config path for Amazon Q Developer
+ */
+function getAmazonQConfigPath(): string {
+  const home = homedir();
+  const os = platform();
+
+  switch (os) {
+    case 'darwin':
+      return join(home, '.aws', 'amazonq', 'mcp.json');
+    case 'win32':
+      return join(home, '.aws', 'amazonq', 'mcp.json');
+    default:
+      return join(home, '.aws', 'amazonq', 'mcp.json');
+  }
+}
+
+/**
  * Detect all available LLM clients
  */
 export function detectLLMClients(): LLMClient[] {
@@ -119,6 +241,48 @@ export function detectLLMClients(): LLMClient[] {
       name: 'continue',
       displayName: 'Continue.dev',
       configPath: getContinueConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'zed',
+      displayName: 'Zed Editor',
+      configPath: getZedConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'cursor',
+      displayName: 'Cursor IDE',
+      configPath: getCursorConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'windsurf',
+      displayName: 'Windsurf (Codeium)',
+      configPath: getWindsurfConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'roocode',
+      displayName: 'Roo Code (VSCode Extension)',
+      configPath: getRooCodeConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'claudecode',
+      displayName: 'Claude Code CLI',
+      configPath: getClaudeCodeConfigPath(),
+      detected: false,
+      configExists: false,
+    },
+    {
+      name: 'amazonq',
+      displayName: 'Amazon Q Developer',
+      configPath: getAmazonQConfigPath(),
       detected: false,
       configExists: false,
     },
@@ -277,6 +441,198 @@ export function configureContinue(projectRoot: string): boolean {
 }
 
 /**
+ * Configure Zed editor with eBay MCP server
+ * Zed uses context_servers in settings.json
+ */
+export function configureZed(projectRoot: string): boolean {
+  try {
+    const configPath = getZedConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize context_servers if it doesn't exist
+    if (!config.context_servers || typeof config.context_servers !== 'object') {
+      config.context_servers = {};
+    }
+
+    const contextServers = config.context_servers as Record<string, unknown>;
+
+    // Add or update eBay MCP server configuration
+    contextServers['ebay-mcp-server'] = {
+      command: {
+        path: 'node',
+        args: [join(projectRoot, 'build', 'index.js')],
+      },
+      settings: {},
+    };
+
+    config.context_servers = contextServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Zed:', error);
+    return false;
+  }
+}
+
+/**
+ * Configure Cursor IDE with eBay MCP server
+ * Cursor uses mcpServers in mcp.json
+ */
+export function configureCursor(projectRoot: string): boolean {
+  try {
+    const configPath = getCursorConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize mcpServers if it doesn't exist
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+      config.mcpServers = {};
+    }
+
+    const mcpServers = config.mcpServers as Record<string, MCPServerConfig>;
+
+    // Add or update eBay MCP server configuration
+    mcpServers['ebay-mcp-server'] = {
+      command: 'node',
+      args: [join(projectRoot, 'build', 'index.js')],
+    };
+
+    config.mcpServers = mcpServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Cursor:', error);
+    return false;
+  }
+}
+
+/**
+ * Configure Windsurf (Codeium) with eBay MCP server
+ */
+export function configureWindsurf(projectRoot: string): boolean {
+  try {
+    const configPath = getWindsurfConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize mcpServers if it doesn't exist
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+      config.mcpServers = {};
+    }
+
+    const mcpServers = config.mcpServers as Record<string, MCPServerConfig>;
+
+    // Add or update eBay MCP server configuration
+    mcpServers['ebay-mcp-server'] = {
+      command: 'node',
+      args: [join(projectRoot, 'build', 'index.js')],
+    };
+
+    config.mcpServers = mcpServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Windsurf:', error);
+    return false;
+  }
+}
+
+/**
+ * Configure Roo Code (VSCode extension) with eBay MCP server
+ */
+export function configureRooCode(projectRoot: string): boolean {
+  try {
+    const configPath = getRooCodeConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize mcpServers if it doesn't exist
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+      config.mcpServers = {};
+    }
+
+    const mcpServers = config.mcpServers as Record<string, MCPServerConfig>;
+
+    // Add or update eBay MCP server configuration
+    mcpServers['ebay-mcp-server'] = {
+      command: 'node',
+      args: [join(projectRoot, 'build', 'index.js')],
+    };
+
+    config.mcpServers = mcpServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Roo Code:', error);
+    return false;
+  }
+}
+
+/**
+ * Configure Claude Code CLI with eBay MCP server
+ * Claude Code CLI uses mcpServers in ~/.claude.json
+ */
+export function configureClaudeCode(projectRoot: string): boolean {
+  try {
+    const configPath = getClaudeCodeConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize mcpServers if it doesn't exist
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+      config.mcpServers = {};
+    }
+
+    const mcpServers = config.mcpServers as Record<string, MCPServerConfig>;
+
+    // Add or update eBay MCP server configuration
+    mcpServers['ebay-mcp-server'] = {
+      command: 'node',
+      args: [join(projectRoot, 'build', 'index.js')],
+    };
+
+    config.mcpServers = mcpServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Claude Code CLI:', error);
+    return false;
+  }
+}
+
+/**
+ * Configure Amazon Q Developer with eBay MCP server
+ */
+export function configureAmazonQ(projectRoot: string): boolean {
+  try {
+    const configPath = getAmazonQConfigPath();
+    const config = readJSONConfig(configPath);
+
+    // Initialize mcpServers if it doesn't exist
+    if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+      config.mcpServers = {};
+    }
+
+    const mcpServers = config.mcpServers as Record<string, MCPServerConfig>;
+
+    // Add or update eBay MCP server configuration
+    mcpServers['ebay-mcp-server'] = {
+      command: 'node',
+      args: [join(projectRoot, 'build', 'index.js')],
+    };
+
+    config.mcpServers = mcpServers;
+    writeJSONConfig(configPath, config);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to configure Amazon Q:', error);
+    return false;
+  }
+}
+
+/**
  * Configure specified LLM client
  */
 export function configureLLMClient(clientName: string, projectRoot: string): boolean {
@@ -287,6 +643,18 @@ export function configureLLMClient(clientName: string, projectRoot: string): boo
       return configureCline(projectRoot);
     case 'continue':
       return configureContinue(projectRoot);
+    case 'zed':
+      return configureZed(projectRoot);
+    case 'cursor':
+      return configureCursor(projectRoot);
+    case 'windsurf':
+      return configureWindsurf(projectRoot);
+    case 'roocode':
+      return configureRooCode(projectRoot);
+    case 'claudecode':
+      return configureClaudeCode(projectRoot);
+    case 'amazonq':
+      return configureAmazonQ(projectRoot);
     default:
       return false;
   }
@@ -340,6 +708,87 @@ Add this to ${getContinueConfigPath()}:
   }
 }`;
 
+    case 'zed':
+      return `
+Add this to ${getZedConfigPath()}:
+
+{
+  "context_servers": {
+    "ebay-mcp-server": {
+      "command": {
+        "path": "node",
+        "args": ["${buildPath}"]
+      },
+      "settings": {}
+    }
+  }
+}`;
+
+    case 'cursor':
+      return `
+Add this to ${getCursorConfigPath()}:
+
+{
+  "mcpServers": {
+    "ebay-mcp-server": {
+      "command": "node",
+      "args": ["${buildPath}"]
+    }
+  }
+}`;
+
+    case 'windsurf':
+      return `
+Add this to ${getWindsurfConfigPath()}:
+
+{
+  "mcpServers": {
+    "ebay-mcp-server": {
+      "command": "node",
+      "args": ["${buildPath}"]
+    }
+  }
+}`;
+
+    case 'roocode':
+      return `
+Add this to ${getRooCodeConfigPath()}:
+
+{
+  "mcpServers": {
+    "ebay-mcp-server": {
+      "command": "node",
+      "args": ["${buildPath}"]
+    }
+  }
+}`;
+
+    case 'claudecode':
+      return `
+Add this to ${getClaudeCodeConfigPath()}:
+
+{
+  "mcpServers": {
+    "ebay-mcp-server": {
+      "command": "node",
+      "args": ["${buildPath}"]
+    }
+  }
+}`;
+
+    case 'amazonq':
+      return `
+Add this to ${getAmazonQConfigPath()}:
+
+{
+  "mcpServers": {
+    "ebay-mcp-server": {
+      "command": "node",
+      "args": ["${buildPath}"]
+    }
+  }
+}`;
+
     default:
       return 'Manual configuration instructions not available for this client.';
   }
@@ -384,6 +833,66 @@ export function verifyClientConfiguration(clientName: string, projectRoot: strin
         return !!mcpServers?.some((server) => server.args?.[0]?.includes('ebay-mcp-server'));
       }
 
+      case 'zed': {
+        const configPath = getZedConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const contextServers = config.context_servers as Record<string, unknown> | undefined;
+
+        return !!contextServers?.['ebay-mcp-server'];
+      }
+
+      case 'cursor': {
+        const configPath = getCursorConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const mcpServers = config.mcpServers as Record<string, MCPServerConfig> | undefined;
+
+        return !!mcpServers?.['ebay-mcp-server'];
+      }
+
+      case 'windsurf': {
+        const configPath = getWindsurfConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const mcpServers = config.mcpServers as Record<string, MCPServerConfig> | undefined;
+
+        return !!mcpServers?.['ebay-mcp-server'];
+      }
+
+      case 'roocode': {
+        const configPath = getRooCodeConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const mcpServers = config.mcpServers as Record<string, MCPServerConfig> | undefined;
+
+        return !!mcpServers?.['ebay-mcp-server'];
+      }
+
+      case 'claudecode': {
+        const configPath = getClaudeCodeConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const mcpServers = config.mcpServers as Record<string, MCPServerConfig> | undefined;
+
+        return !!mcpServers?.['ebay-mcp-server'];
+      }
+
+      case 'amazonq': {
+        const configPath = getAmazonQConfigPath();
+        if (!existsSync(configPath)) return false;
+
+        const config = readJSONConfig(configPath);
+        const mcpServers = config.mcpServers as Record<string, MCPServerConfig> | undefined;
+
+        return !!mcpServers?.['ebay-mcp-server'];
+      }
+
       default:
         return false;
     }
@@ -396,15 +905,34 @@ export function verifyClientConfiguration(clientName: string, projectRoot: strin
  * Get all LLM clients (detected and undetected)
  */
 export function getAllSupportedClients(): string[] {
-  return ['claude', 'cline', 'continue'];
+  return [
+    'claude',
+    'cline',
+    'continue',
+    'zed',
+    'cursor',
+    'windsurf',
+    'roocode',
+    'claudecode',
+    'amazonq',
+  ];
 }
 
 /**
  * Check if client supports MCP protocol
  */
 export function supportsNativeMCP(clientName: string): boolean {
-  // Currently, MCP is supported by Anthropic's Claude Desktop and compatible clients
-  // Gemini and ChatGPT do not have native MCP support as of now
-  const supportedClients = ['claude', 'cline', 'continue'];
+  // All these clients support MCP (Model Context Protocol)
+  const supportedClients = [
+    'claude',
+    'cline',
+    'continue',
+    'zed',
+    'cursor',
+    'windsurf',
+    'roocode',
+    'claudecode',
+    'amazonq',
+  ];
   return supportedClients.includes(clientName.toLowerCase());
 }

@@ -90,11 +90,65 @@ function getConfigPaths(): Record<string, string> {
     paths.claude = join(home, '.config/Claude/claude_desktop_config.json');
   }
 
-  // Gemini config path
-  paths.gemini = join(home, '.config/gemini/config.json');
+  // Cline (VSCode Extension) config paths
+  if (os === 'darwin') {
+    paths.cline = join(
+      home,
+      'Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json'
+    );
+  } else if (os === 'win32') {
+    paths.cline = join(
+      home,
+      'AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json'
+    );
+  } else {
+    paths.cline = join(
+      home,
+      '.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json'
+    );
+  }
 
-  // ChatGPT config path
-  paths.chatgpt = join(home, '.config/chatgpt/config.json');
+  // Continue.dev config path
+  paths.continue = join(home, '.continue/config.json');
+
+  // Zed editor config paths
+  if (os === 'darwin') {
+    paths.zed = join(home, '.config/zed/settings.json');
+  } else if (os === 'win32') {
+    paths.zed = join(home, 'AppData/Roaming/Zed/settings.json');
+  } else {
+    paths.zed = join(home, '.config/zed/settings.json');
+  }
+
+  // Cursor IDE config path
+  paths.cursor = join(home, '.cursor/mcp.json');
+
+  // Windsurf (Codeium) config path
+  paths.windsurf = join(home, '.codeium/windsurf/mcp_config.json');
+
+  // Roo Code (VSCode Extension) config paths
+  if (os === 'darwin') {
+    paths.roocode = join(
+      home,
+      'Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json'
+    );
+  } else if (os === 'win32') {
+    paths.roocode = join(
+      home,
+      'AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json'
+    );
+  } else {
+    paths.roocode = join(
+      home,
+      '.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json'
+    );
+  }
+
+  // Claude Code CLI config path
+  paths.claudecode = join(home, '.claude.json');
+
+  // Amazon Q Developer config path
+  paths.amazonq = join(home, '.aws/amazonq/mcp.json');
 
   return paths;
 }
@@ -175,30 +229,75 @@ function updateClientConfig(client: MCPClient, serverConfig: MCPServerConfig): b
     }
 
     // Read existing config or create new one
-    interface McpConfig {
-      mcpServers: Record<string, unknown>;
-      [key: string]: unknown;
-    }
-    let config: McpConfig = { mcpServers: {} };
+    let config: Record<string, unknown> = {};
     if (existsSync(client.configPath)) {
       try {
         const existing = readFileSync(client.configPath, 'utf-8');
-        const parsed = JSON.parse(existing) as Partial<McpConfig>;
-        config = {
-          ...parsed,
-          mcpServers: parsed.mcpServers || {},
-        };
+        config = JSON.parse(existing) as Record<string, unknown>;
       } catch (error) {
         printWarning(`Invalid JSON in ${client.configPath}, creating backup and new config`);
         const backup = `${client.configPath}.backup.${Date.now()}`;
         writeFileSync(backup, readFileSync(client.configPath));
         printInfo(`Backup saved to: ${backup}`);
-        config = { mcpServers: {} };
+        config = {};
       }
     }
 
-    // Update eBay server config
-    config.mcpServers.ebay = serverConfig;
+    // Handle different config formats for different clients
+    switch (client.name) {
+      case 'zed': {
+        // Zed uses context_servers with a different structure
+        if (!config.context_servers || typeof config.context_servers !== 'object') {
+          config.context_servers = {};
+        }
+        const contextServers = config.context_servers as Record<string, unknown>;
+        contextServers['ebay-mcp-server'] = {
+          command: {
+            path: serverConfig.command,
+            args: serverConfig.args,
+            env: serverConfig.env,
+          },
+          settings: {},
+        };
+        break;
+      }
+
+      case 'continue': {
+        // Continue.dev uses experimental.modelContextProtocolServers as an array
+        if (!config.experimental || typeof config.experimental !== 'object') {
+          config.experimental = {};
+        }
+        const experimental = config.experimental as Record<string, unknown>;
+        if (
+          !experimental.modelContextProtocolServers ||
+          !Array.isArray(experimental.modelContextProtocolServers)
+        ) {
+          experimental.modelContextProtocolServers = [];
+        }
+        const mcpServers = experimental.modelContextProtocolServers as MCPServerConfig[];
+
+        // Check if eBay server already exists and update/add
+        const existingIndex = mcpServers.findIndex(
+          (server) => server.command === 'node' && server.args?.[0]?.includes('ebay-mcp')
+        );
+        if (existingIndex >= 0) {
+          mcpServers[existingIndex] = serverConfig;
+        } else {
+          mcpServers.push(serverConfig);
+        }
+        break;
+      }
+
+      default: {
+        // Standard mcpServers format for Claude Desktop, Cline, Cursor, Windsurf, Roo Code, Claude Code CLI, Amazon Q
+        if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+          config.mcpServers = {};
+        }
+        const mcpServers = config.mcpServers as Record<string, unknown>;
+        mcpServers['ebay-mcp-server'] = serverConfig;
+        break;
+      }
+    }
 
     // Write config
     writeFileSync(client.configPath, JSON.stringify(config, null, 2));
@@ -306,7 +405,9 @@ async function main(): Promise<void> {
 
   if (detectedClients.length === 0) {
     printWarning('No MCP clients detected on this system');
-    printInfo('Supported clients: Claude Desktop, Gemini, ChatGPT');
+    printInfo(
+      'Supported clients: Claude Desktop, Cline, Continue.dev, Zed, Cursor, Windsurf, Roo Code, Claude Code CLI, Amazon Q'
+    );
     printInfo('Install a client and run this script again');
   } else {
     printSuccess(`Detected ${detectedClients.length} MCP client(s):`);
@@ -343,7 +444,7 @@ async function main(): Promise<void> {
   if (generatedCount > 0) {
     printSuccess(`Successfully configured ${generatedCount} MCP client(s)`);
     print('\n📝 Next Steps:', 'cyan');
-    print('  1. Restart your MCP clients (Claude Desktop, Gemini, etc.)');
+    print('  1. Restart your MCP clients (Claude Desktop, Cursor, Zed, etc.)');
     print('  2. Verify connection in MCP client settings/logs');
     print('  3. Test with: "List my eBay inventory items"');
 
@@ -354,7 +455,9 @@ async function main(): Promise<void> {
   } else {
     printInfo('No configurations generated (no MCP clients detected)');
     print('\n📝 To complete setup:', 'cyan');
-    print('  1. Install an MCP client (Claude Desktop, Gemini, or ChatGPT)');
+    print(
+      '  1. Install an MCP client (Claude Desktop, Cline, Cursor, Zed, Windsurf, Continue.dev, Roo Code, Claude Code CLI, or Amazon Q)'
+    );
     print('  2. Run: npm run auto-setup');
   }
 
