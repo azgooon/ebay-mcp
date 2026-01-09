@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
-import prompts from 'prompts';
-import chalk from 'chalk';
-import axios from 'axios';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir, platform } from 'os';
+
+import axios from 'axios';
+import chalk from 'chalk';
 import { config } from 'dotenv';
 import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
+import prompts from 'prompts';
 
 config();
 
@@ -17,6 +18,8 @@ const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '../..');
 
 const TOTAL_STEPS = 5;
+
+type StepResult = 'continue' | 'back' | 'cancel';
 
 interface SetupState {
   currentStep: number;
@@ -341,7 +344,7 @@ async function fetchEbayUserInfo(
   const identityBaseUrl =
     environment === 'production' ? 'https://apiz.ebay.com' : 'https://apiz.sandbox.ebay.com';
 
-  const response = await axios.get(`${identityBaseUrl}/commerce/identity/v1/user`, {
+  const response = await axios.get(`${identityBaseUrl}/commerce/identity/v1/user/`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
@@ -360,8 +363,7 @@ function displayUserInfo(userInfo: EbayUserInfo): void {
       ? `${userInfo.individualAccount.firstName} ${userInfo.individualAccount.lastName}`
       : userInfo.businessAccount?.name || 'N/A';
 
-  const email =
-    userInfo.individualAccount?.email || userInfo.businessAccount?.email || 'N/A';
+  const email = userInfo.individualAccount?.email || userInfo.businessAccount?.email || 'N/A';
 
   const marketplaceMap: Record<string, string> = {
     EBAY_US: 'eBay United States',
@@ -374,7 +376,10 @@ function displayUserInfo(userInfo: EbayUserInfo): void {
     EBAY_ES: 'eBay Spain',
   };
 
-  const marketplace = marketplaceMap[userInfo.registrationMarketplaceId || ''] || userInfo.registrationMarketplaceId || 'N/A';
+  const marketplace =
+    marketplaceMap[userInfo.registrationMarketplaceId || ''] ||
+    userInfo.registrationMarketplaceId ||
+    'N/A';
 
   showBox('eBay Account Verified', [
     `Username:        ${userInfo.username}`,
@@ -655,14 +660,15 @@ function updateClaudeDesktopConfig(
 
     // Count existing servers for confirmation message
     const serverCount = Object.keys(mcpServers).length;
-    const otherServers = Object.keys(mcpServers).filter(k => k !== 'ebay');
+    const otherServers = Object.keys(mcpServers).filter((k) => k !== 'ebay');
 
     return {
       success: true,
       configPath,
-      details: otherServers.length > 0
-        ? `Preserved ${otherServers.length} existing server(s): ${otherServers.join(', ')}`
-        : `Added ebay server (${serverCount} total)`,
+      details:
+        otherServers.length > 0
+          ? `Preserved ${otherServers.length} existing server(s): ${otherServers.join(', ')}`
+          : `Added ebay server (${serverCount} total)`,
     };
   } catch (error) {
     return {
@@ -713,7 +719,7 @@ EBAY_APP_ACCESS_TOKEN=${envConfig.EBAY_APP_ACCESS_TOKEN || ''}
   writeFileSync(envPath, content, 'utf-8');
 }
 
-async function stepWelcome(state: SetupState): Promise<boolean> {
+async function stepWelcome(state: SetupState): Promise<StepResult> {
   clearScreen();
   showLogo();
 
@@ -737,10 +743,10 @@ async function stepWelcome(state: SetupState): Promise<boolean> {
     initial: true,
   });
 
-  return response.continue !== false;
+  return response.continue !== false ? 'continue' : 'cancel';
 }
 
-async function stepEnvironment(state: SetupState): Promise<boolean> {
+async function stepEnvironment(state: SetupState): Promise<StepResult> {
   clearScreen();
   showLogo();
   showProgress(1, 'Select Environment');
@@ -768,18 +774,20 @@ async function stepEnvironment(state: SetupState): Promise<boolean> {
     choices: [
       { title: '🧪 Sandbox (Recommended for testing)', value: 'sandbox' },
       { title: '🚀 Production (Live trading)', value: 'production' },
+      { title: ui.dim('← Go back'), value: 'back' },
     ],
     initial: state.config.EBAY_ENVIRONMENT === 'production' ? 1 : 0,
   });
 
-  if (!response.environment) return false;
+  if (!response.environment) return 'cancel';
+  if (response.environment === 'back') return 'back';
 
   state.environment = response.environment;
   state.config.EBAY_ENVIRONMENT = response.environment;
-  return true;
+  return 'continue';
 }
 
-async function stepCredentials(state: SetupState): Promise<boolean> {
+async function stepCredentials(state: SetupState): Promise<StepResult> {
   clearScreen();
   showLogo();
   showProgress(2, 'eBay Credentials');
@@ -788,6 +796,21 @@ async function stepCredentials(state: SetupState): Promise<boolean> {
 
   showTip('Get credentials at: https://developer.ebay.com/my/keys');
   showKeyboardHints(['Tab: Next field', 'Enter: Submit', 'Ctrl+C: Cancel']);
+
+  // First ask if they want to go back
+  const navChoice = await prompts({
+    type: 'select',
+    name: 'action',
+    message: 'What would you like to do?',
+    choices: [
+      { title: '📝 Enter/update credentials', value: 'enter' },
+      { title: ui.dim('← Go back'), value: 'back' },
+    ],
+    initial: 0,
+  });
+
+  if (!navChoice.action) return 'cancel';
+  if (navChoice.action === 'back') return 'back';
 
   const responses = await prompts([
     {
@@ -813,16 +836,16 @@ async function stepCredentials(state: SetupState): Promise<boolean> {
     },
   ]);
 
-  if (!responses.clientId) return false;
+  if (!responses.clientId) return 'cancel';
 
   state.config.EBAY_CLIENT_ID = responses.clientId;
   state.config.EBAY_CLIENT_SECRET = responses.clientSecret;
   state.config.EBAY_REDIRECT_URI = responses.redirectUri;
 
-  return true;
+  return 'continue';
 }
 
-async function stepOAuth(state: SetupState): Promise<boolean> {
+async function stepOAuth(state: SetupState): Promise<StepResult> {
   clearScreen();
   showLogo();
   showProgress(3, 'OAuth Setup');
@@ -842,13 +865,21 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
     showSuccess('Existing refresh token detected.');
 
     const keepToken = await prompts({
-      type: 'confirm',
-      name: 'keep',
-      message: 'Keep existing refresh token?',
-      initial: true,
+      type: 'select',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { title: '✓ Keep and verify existing token', value: 'keep' },
+        { title: '🔄 Set up new OAuth token', value: 'new' },
+        { title: ui.dim('← Go back'), value: 'back' },
+      ],
+      initial: 0,
     });
 
-    if (keepToken.keep) {
+    if (!keepToken.action) return 'cancel';
+    if (keepToken.action === 'back') return 'back';
+
+    if (keepToken.action === 'keep') {
       // Verify the existing token works by fetching user info
       console.log('\n  ' + ui.info('Verifying existing refresh token...'));
       try {
@@ -881,12 +912,14 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         } else {
           showInfo('Claude Desktop not detected. You can configure it manually later.');
         }
-
+        console.log('');
         showKeyboardHints(['Enter: Continue to next step']);
         await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       } catch (error) {
         const errorMsg = axios.isAxiosError(error)
-          ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
+          ? error.response?.data?.error_description ||
+            error.response?.data?.errors?.[0]?.message ||
+            error.message
           : error instanceof Error
             ? error.message
             : 'Unknown error';
@@ -901,16 +934,19 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         });
 
         if (!continueAnyway.continue) {
-          showInfo('Keeping existing token. You may need to re-authenticate if it doesn\'t work.');
-          return true;
+          showInfo("Keeping existing token. You may need to re-authenticate if it doesn't work.");
+          return 'continue';
         }
-        // Fall through to OAuth setup options
+        // Clear invalid tokens so we fall through to OAuth setup options
+        state.config.EBAY_USER_ACCESS_TOKEN = '';
+        state.config.EBAY_USER_REFRESH_TOKEN = '';
       }
 
       if (state.config.EBAY_USER_ACCESS_TOKEN) {
-        return true;
+        return 'continue';
       }
     }
+    // User chose 'new' - fall through to OAuth setup options
   }
 
   const tokenChoice = await prompts({
@@ -919,13 +955,16 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
     message: 'How would you like to set up OAuth?',
     choices: [
       { title: '📝 I have a refresh token', value: 'existing' },
-      { title: '🔗 Generate OAuth URL (manual flow)', value: 'manual' },
+      { title: '🔗 Generate OAuth URL (opens browser)', value: 'manual' },
+      { title: '🔑 Paste authorization code (already have code)', value: 'code' },
       { title: '⏭️  Skip for now (1k req/day limit)', value: 'skip' },
+      { title: ui.dim('← Go back'), value: 'back' },
     ],
     initial: 0,
   });
 
-  if (!tokenChoice.method) return false;
+  if (!tokenChoice.method) return 'cancel';
+  if (tokenChoice.method === 'back') return 'back';
 
   if (tokenChoice.method === 'existing') {
     const tokenInput = await prompts({
@@ -976,55 +1015,39 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
           console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
           const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
           if (claudeResult.success) {
-            showSuccess('Claude Desktop config updated!');
-            if (claudeResult.details) {
-              showInfo(claudeResult.details);
-            }
+            showSuccess('Claude Desktop config updated with credentials!');
             showInfo(`Config: ${claudeResult.configPath}`);
           } else {
-            showError(`Could not update Claude Desktop: ${claudeResult.error}`);
-            if (claudeResult.details) {
-              showInfo(claudeResult.details);
-            }
+            showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
           }
-        } else {
-          showInfo('Claude Desktop not detected. You can configure it manually later.');
         }
 
         console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!\n');
-
         showKeyboardHints(['Enter: Continue to next step']);
         await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       } catch (error) {
         const errorMsg = axios.isAxiosError(error)
-          ? error.response?.data?.error_description || error.response?.data?.errors?.[0]?.message || error.message
+          ? error.response?.data?.error_description ||
+            error.response?.data?.errors?.[0]?.message ||
+            error.message
           : error instanceof Error
             ? error.message
             : 'Unknown error';
         showError(`Token verification failed: ${errorMsg}`);
         showWarning('The refresh token may be expired or invalid.');
-        showInfo('Token saved anyway. You may need to generate a new token if it doesn\'t work.\n');
-
+        showInfo("Token saved anyway. You may need to generate a new token if it doesn't work.\n");
         showKeyboardHints(['Enter: Continue to next step']);
         await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
       }
     }
   } else if (tokenChoice.method === 'manual') {
-    const scopes = [
-      'https://api.ebay.com/oauth/api_scope',
-      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
-      'https://api.ebay.com/oauth/api_scope/sell.inventory',
-      'https://api.ebay.com/oauth/api_scope/sell.marketing',
-      'https://api.ebay.com/oauth/api_scope/sell.account',
-      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-    ];
-
     const baseUrl =
       state.environment === 'production'
         ? 'https://auth.ebay.com/oauth2/authorize'
         : 'https://auth.sandbox.ebay.com/oauth2/authorize';
 
-    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}&redirect_uri=${encodeURIComponent(state.config.EBAY_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}`;
+    // Scopes are optional - eBay uses scopes configured in RuName settings
+    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}&redirect_uri=${encodeURIComponent(state.config.EBAY_REDIRECT_URI)}&response_type=code`;
 
     console.log('\n  ' + ui.bold('OAuth Authorization URL:'));
     console.log(ui.dim('  ' + '─'.repeat(56)));
@@ -1054,20 +1077,21 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
       validate: (v: string) => {
         if (!v.trim()) return 'Please paste the URL or code from the callback';
         const code = parseAuthorizationCode(v);
-        if (!code) return 'Could not find authorization code. Paste the full URL or the code parameter.';
+        if (!code)
+          return 'Could not find authorization code. Paste the full URL or the code parameter.';
         return true;
       },
     });
 
     if (!codeInput.code) {
       showWarning('OAuth setup cancelled.');
-      return true;
+      return 'continue';
     }
 
     const authCode = parseAuthorizationCode(codeInput.code);
     if (!authCode) {
       showError('Could not parse authorization code.');
-      return true;
+      return 'continue';
     }
 
     // Exchange code for tokens
@@ -1123,26 +1147,21 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
         const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
         if (claudeResult.success) {
-          showSuccess('Claude Desktop config updated!');
-          if (claudeResult.details) {
-            showInfo(claudeResult.details);
-          }
+          showSuccess('Claude Desktop config updated with credentials!');
           showInfo(`Config: ${claudeResult.configPath}`);
         } else {
-          showError(`Could not update Claude Desktop: ${claudeResult.error}`);
-          if (claudeResult.details) {
-            showInfo(claudeResult.details);
-          }
+          showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
         }
-      } else {
-        showInfo('Claude Desktop not detected. You can configure it manually later.');
       }
 
       console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!');
-      console.log(`  ${ui.dim('Access token expires in:')} ${Math.floor(tokens.expiresIn / 60)} minutes`);
-      console.log(`  ${ui.dim('Refresh token expires in:')} ${Math.floor(tokens.refreshTokenExpiresIn / 60 / 60 / 24)} days`);
+      console.log(
+        `  ${ui.dim('Access token expires in:')} ${Math.floor(tokens.expiresIn / 60)} minutes`
+      );
+      console.log(
+        `  ${ui.dim('Refresh token expires in:')} ${Math.floor(tokens.refreshTokenExpiresIn / 60 / 60 / 24)} days`
+      );
       console.log(`  ${ui.dim('All tokens will be saved to .env')}\n`);
-
       showKeyboardHints(['Enter: Continue to next step']);
       await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
     } catch (error) {
@@ -1160,14 +1179,130 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
       showKeyboardHints(['Enter: Continue']);
       await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
     }
-  } else {
+  } else if (tokenChoice.method === 'code') {
+    // Direct code paste - user already has an authorization code
+    console.log('\n  ' + ui.bold('Paste Authorization Code'));
+    console.log(
+      ui.dim('  If you already completed OAuth in a browser and have the code from the callback URL.\n')
+    );
+
+    const codeInput = await prompts({
+      type: 'text',
+      name: 'code',
+      message: 'Paste the callback URL or authorization code:',
+      validate: (v: string) => {
+        if (!v.trim()) return 'Please paste the URL or code from the callback';
+        const code = parseAuthorizationCode(v);
+        if (!code)
+          return 'Could not find authorization code. Paste the full URL or the code parameter.';
+        return true;
+      },
+    });
+
+    if (!codeInput.code) {
+      showWarning('OAuth setup cancelled.');
+      return 'continue';
+    }
+
+    const authCode = parseAuthorizationCode(codeInput.code);
+    if (!authCode) {
+      showError('Could not parse authorization code.');
+      return 'continue';
+    }
+
+    // Exchange code for tokens
+    console.log('\n  ' + ui.info('Exchanging authorization code for tokens...'));
+
+    try {
+      const tokens = await exchangeAuthorizationCode(
+        authCode,
+        state.config.EBAY_CLIENT_ID,
+        state.config.EBAY_CLIENT_SECRET,
+        state.config.EBAY_REDIRECT_URI,
+        state.environment
+      );
+
+      showSuccess('Authorization code exchanged successfully!');
+
+      // Store all user tokens in state.config (will be saved to .env by saveConfig)
+      state.config.EBAY_USER_REFRESH_TOKEN = tokens.refreshToken;
+      state.config.EBAY_USER_ACCESS_TOKEN = tokens.accessToken;
+
+      // Verify setup by fetching user info
+      console.log('  ' + ui.info('Verifying setup by fetching your eBay account info...'));
+      try {
+        const userInfo = await fetchEbayUserInfo(tokens.accessToken, state.environment);
+        showSuccess('Account verified successfully!');
+        displayUserInfo(userInfo);
+      } catch (userError) {
+        const userErrorMsg = axios.isAxiosError(userError)
+          ? userError.response?.data?.errors?.[0]?.message || userError.message
+          : userError instanceof Error
+            ? userError.message
+            : 'Unknown error';
+        showWarning(`Could not fetch user info: ${userErrorMsg}`);
+        showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
+      }
+
+      // Also get app access token for client credentials flow
+      console.log('  ' + ui.info('Getting app access token...'));
+      try {
+        const appToken = await getAppAccessToken(
+          state.config.EBAY_CLIENT_ID,
+          state.config.EBAY_CLIENT_SECRET,
+          state.environment
+        );
+        state.config.EBAY_APP_ACCESS_TOKEN = appToken;
+        showSuccess('App access token obtained!');
+      } catch {
+        showWarning('Could not get app access token (user tokens will still work).');
+      }
+
+      // Update Claude Desktop config if installed
+      if (isClaudeDesktopInstalled()) {
+        console.log('  ' + ui.info('Updating Claude Desktop configuration...'));
+        const claudeResult = updateClaudeDesktopConfig(state.config, state.environment);
+        if (claudeResult.success) {
+          showSuccess('Claude Desktop config updated with credentials!');
+          showInfo(`Config: ${claudeResult.configPath}`);
+        } else {
+          showWarning(`Could not update Claude Desktop: ${claudeResult.error}`);
+        }
+      }
+
+      console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!');
+      console.log(
+        `  ${ui.dim('Access token expires in:')} ${Math.floor(tokens.expiresIn / 60)} minutes`
+      );
+      console.log(
+        `  ${ui.dim('Refresh token expires in:')} ${Math.floor(tokens.refreshTokenExpiresIn / 60 / 60 / 24)} days`
+      );
+      console.log(`  ${ui.dim('All tokens will be saved to .env')}\n`);
+      showKeyboardHints(['Enter: Continue to next step']);
+      await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
+    } catch (error) {
+      const errorMsg = axios.isAxiosError(error)
+        ? error.response?.data?.error_description || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error';
+      showError(`Failed to exchange code: ${errorMsg}`);
+      console.log('\n  ' + ui.dim('Common issues:'));
+      console.log('  • Authorization code expired (codes are valid for ~5 minutes)');
+      console.log('  • Code was already used (each code can only be used once)');
+      console.log('  • Redirect URI mismatch (must match exactly what is configured in eBay)\n');
+
+      showKeyboardHints(['Enter: Continue']);
+      await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
+    }
+  } else if (tokenChoice.method === 'skip') {
     showWarning("Skipping OAuth. You'll be limited to 1,000 requests/day.");
   }
 
-  return true;
+  return 'continue';
 }
 
-async function stepMCPClients(state: SetupState): Promise<boolean> {
+async function stepMCPClients(state: SetupState): Promise<StepResult> {
   clearScreen();
   showLogo();
   showProgress(4, 'MCP Client Setup');
@@ -1186,8 +1321,20 @@ async function stepMCPClients(state: SetupState): Promise<boolean> {
 
     showInfo('Install one of these clients and run setup again.');
 
-    await prompts({ type: 'text', name: 'continue', message: 'Press Enter to continue...' });
-    return true;
+    const navChoice = await prompts({
+      type: 'select',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { title: '→ Continue to finish setup', value: 'continue' },
+        { title: ui.dim('← Go back'), value: 'back' },
+      ],
+      initial: 0,
+    });
+
+    if (!navChoice.action) return 'cancel';
+    if (navChoice.action === 'back') return 'back';
+    return 'continue';
   }
 
   showBox(
@@ -1199,6 +1346,26 @@ async function stepMCPClients(state: SetupState): Promise<boolean> {
       return status;
     })
   );
+
+  // First ask if they want to configure or go back
+  const navChoice = await prompts({
+    type: 'select',
+    name: 'action',
+    message: 'What would you like to do?',
+    choices: [
+      { title: '⚙️  Configure MCP clients', value: 'configure' },
+      { title: '⏭️  Skip client configuration', value: 'skip' },
+      { title: ui.dim('← Go back'), value: 'back' },
+    ],
+    initial: 0,
+  });
+
+  if (!navChoice.action) return 'cancel';
+  if (navChoice.action === 'back') return 'back';
+  if (navChoice.action === 'skip') {
+    showInfo('Skipping client configuration.');
+    return 'continue';
+  }
 
   const clientChoice = await prompts({
     type: 'multiselect',
@@ -1215,7 +1382,7 @@ async function stepMCPClients(state: SetupState): Promise<boolean> {
 
   if (!clientChoice.clients || clientChoice.clients.length === 0) {
     showInfo('Skipping client configuration.');
-    return true;
+    return 'continue';
   }
 
   console.log('');
@@ -1235,7 +1402,7 @@ async function stepMCPClients(state: SetupState): Promise<boolean> {
     }
   }
 
-  return true;
+  return 'continue';
 }
 
 async function stepComplete(state: SetupState): Promise<void> {
@@ -1344,11 +1511,16 @@ async function main(): Promise<void> {
 
   const steps = [stepWelcome, stepEnvironment, stepCredentials, stepOAuth, stepMCPClients];
 
-  for (const step of steps) {
-    const shouldContinue = await step(state);
-    if (!shouldContinue) {
+  let stepIndex = 0;
+  while (stepIndex < steps.length) {
+    const result = await steps[stepIndex](state);
+    if (result === 'cancel') {
       console.log(ui.warning('\n  Setup cancelled.\n'));
       process.exit(0);
+    } else if (result === 'back' && stepIndex > 0) {
+      stepIndex--;
+    } else {
+      stepIndex++;
     }
   }
 
