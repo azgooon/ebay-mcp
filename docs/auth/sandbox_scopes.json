@@ -4,6 +4,14 @@
       "Description": "View public data from eBay"
   },
   {
+      "Scope": "https://api.ebay.com/oauth/api_scope/buy.order.readonly",
+      "Description": "View your order details"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/buy.guest.order",
+      "Description": "Purchase eBay items off eBay"
+  },
+  {
       "Scope": "https://api.ebay.com/oauth/api_scope/sell.marketing.readonly",
       "Description": "View your eBay marketing activities, such as ad campaigns and listing promotions"
   },
@@ -40,6 +48,46 @@
       "Description": "View your selling analytics data, such as performance reports"
   },
   {
+      "Scope": "https://api.ebay.com/oauth/api_scope/sell.marketplace.insights.readonly",
+      "Description": "This scope would allow signed in users read only access to marketplace insights."
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.catalog.readonly",
+      "Description": "This scope would allow signed in user to read catalog data."
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/buy.shopping.cart",
+      "Description": "This scope would allow signed in user to access shopping carts"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/buy.offer.auction",
+      "Description": "View and manage bidding activities for auctions"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
+      "Description": "View a user's basic information, such as username or business account details, from their eBay member account"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.email.readonly",
+      "Description": "View a user's personal email information from their eBay member account"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.phone.readonly",
+      "Description": "View a user's personal telephone information from their eBay member account"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.address.readonly",
+      "Description": "View a user's personal address information from their eBay member account"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.name.readonly",
+      "Description": "View a user's first and last name from their eBay member account"
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.status.readonly",
+      "Description": "View a user's eBay member account status"
+  },
+  {
       "Scope": "https://api.ebay.com/oauth/api_scope/sell.finances",
       "Description": "View and manage your payment and order information to display this information to you and allow you to initiate refunds using the third party application"
   },
@@ -48,8 +96,12 @@
       "Description": "View and manage disputes and related details (including payment and order information)."
   },
   {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
-      "Description": "View a user's basic information, such as username or business account details, from their eBay member account"
+      "Scope": "https://api.ebay.com/oauth/api_scope/sell.item.draft",
+      "Description": "View and manage your item drafts."
+  },
+  {
+      "Scope": "https://api.ebay.com/oauth/api_scope/sell.item",
+      "Description": "View and manage your item information."
   },
   {
       "Scope": "https://api.ebay.com/oauth/api_scope/sell.reputation",
@@ -76,67 +128,15 @@
       "Description": "View eBay stores"
   },
   {
-      "Scope": "https://api.ebay.com/oauth/api_scope/sell.edelivery",
-      "Description": "Allows access to eDelivery International Shipping APIs."
-  },
-  {
       "Scope": "https://api.ebay.com/oauth/api_scope/commerce.vero",
       "Description": "Allows access to APIs that are related to eBay's Verified Rights Owner (VeRO) program."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/sell.inventory.mapping",
-      "Description": "Enables applications to manage and enhance inventory listings through the Inventory Mapping Public API."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.message",
-      "Description": "Allows access to eBay Message APIs."
   },
   {
       "Scope": "https://api.ebay.com/oauth/api_scope/commerce.feedback",
       "Description": "Allows access to Feedback APIs."
   },
   {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.shipping",
-      "Description": "View and manage shipping information"
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.feedback.readonly",
-      "Description": "Allows readonly access to Feedback APIs."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/sell.item.draft",
-      "Description": "View and manage your item drafts."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/sell.item",
-      "Description": "View and manage your item information."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/sell.marketplace.insights.readonly",
-      "Description": "This scope would allow signed in users read only access to marketplace insights."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.catalog.readonly",
-      "Description": "This scope would allow signed in user to read catalog data."
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.email.readonly",
-      "Description": "View a user's personal email information from their eBay member account"
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.phone.readonly",
-      "Description": "View a user's personal telephone information from their eBay member account"
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.address.readonly",
-      "Description": "View a user's personal address information from their eBay member account"
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.name.readonly",
-      "Description": "View a user's first and last name from their eBay member account"
-  },
-  {
-      "Scope": "https://api.ebay.com/oauth/api_scope/commerce.identity.status.readonly",
-      "Description": "View a user's eBay member account status"
+      "Scope": "https://api.ebay.com/oauth/api_scope/sell.inventory.mapping",
+      "Description": "Enables applications to manage and enhance inventory listings through the Inventory Mapping Public API."
   }
 ]

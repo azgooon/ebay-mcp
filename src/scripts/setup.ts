@@ -10,8 +10,9 @@ import { config } from 'dotenv';
 import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import prompts from 'prompts';
+import { getDefaultScopes } from '../config/environment.js';
 
-config();
+config({ quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -649,10 +650,15 @@ function updateClaudeDesktopConfig(
     }
 
     // Add or update only the 'ebay' server - preserve all other servers
+    // Use npx with --yes flag and suppress npm/node output to keep stdout clean for MCP
     mcpServers['ebay'] = {
       command: 'npx',
-      args: ['-y', 'ebay-mcp'],
-      env: envVars,
+      args: ['--yes', '--quiet', 'ebay-mcp'],
+      env: {
+        ...envVars,
+        NODE_NO_WARNINGS: '1',
+        NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+      },
     };
 
     // Write back the complete config with proper formatting
@@ -939,7 +945,14 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
             ? error.message
             : 'Unknown error';
         showError(`Token verification failed: ${errorMsg}`);
-        showWarning('Your existing refresh token may be expired or invalid.');
+
+        // Provide specific guidance based on error type
+        if (errorMsg.toLowerCase().includes('access denied')) {
+          showWarning('Your token may be missing required OAuth scopes.');
+          showInfo('Generating a new token via OAuth URL will include all necessary scopes.');
+        } else {
+          showWarning('Your existing refresh token may be expired or invalid.');
+        }
 
         const continueAnyway = await prompts({
           type: 'confirm',
@@ -964,17 +977,29 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
     // User chose 'new' - fall through to OAuth setup options
   }
 
+  // Check if we just cleared tokens due to failure (recommend OAuth URL in that case)
+  const hadTokenFailure = hasToken && !state.config.EBAY_USER_REFRESH_TOKEN;
+
   const tokenChoice = await prompts({
     type: 'select',
     name: 'method',
     message: 'How would you like to set up OAuth?',
-    choices: [
-      { title: '📝 I have a refresh token', value: 'existing' },
-      { title: '🔗 Generate OAuth URL (opens browser)', value: 'manual' },
-      { title: '🔑 Paste authorization code (already have code)', value: 'code' },
-      { title: '⏭️  Skip for now (1k req/day limit)', value: 'skip' },
-      { title: ui.dim('← Go back'), value: 'back' },
-    ],
+    choices: hadTokenFailure
+      ? [
+          // After token failure, prioritize OAuth URL to get fresh token with proper scopes
+          { title: '🔗 Generate OAuth URL (recommended)', value: 'manual' },
+          { title: '🔑 Paste authorization code (already have code)', value: 'code' },
+          { title: '📝 I have a different refresh token', value: 'existing' },
+          { title: '⏭️  Skip for now (1k req/day limit)', value: 'skip' },
+          { title: ui.dim('← Go back'), value: 'back' },
+        ]
+      : [
+          { title: '📝 I have a refresh token', value: 'existing' },
+          { title: '🔗 Generate OAuth URL (opens browser)', value: 'manual' },
+          { title: '🔑 Paste authorization code (already have code)', value: 'code' },
+          { title: '⏭️  Skip for now (1k req/day limit)', value: 'skip' },
+          { title: ui.dim('← Go back'), value: 'back' },
+        ],
     initial: 0,
   });
 
@@ -1061,8 +1086,10 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
         ? 'https://auth.ebay.com/oauth2/authorize'
         : 'https://auth.sandbox.ebay.com/oauth2/authorize';
 
-    // Scopes are optional - eBay uses scopes configured in RuName settings
-    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}&redirect_uri=${encodeURIComponent(state.config.EBAY_REDIRECT_URI)}&response_type=code`;
+    // Get scopes from environment config
+    const scopes = getDefaultScopes(state.environment);
+    const scopeParam = encodeURIComponent(scopes.join(' '));
+    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}&redirect_uri=${encodeURIComponent(state.config.EBAY_REDIRECT_URI)}&response_type=code&scope=${scopeParam}`;
 
     console.log('\n  ' + ui.bold('OAuth Authorization URL:'));
     console.log(ui.dim('  ' + '─'.repeat(56)));
@@ -1127,7 +1154,7 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
       state.config.EBAY_USER_REFRESH_TOKEN = tokens.refreshToken;
       state.config.EBAY_USER_ACCESS_TOKEN = tokens.accessToken;
 
-      // Verify setup by fetching user info
+      // Verify setup by fetching user info (optional - requires identity scope)
       console.log('  ' + ui.info('Verifying setup by fetching your eBay account info...'));
       try {
         const userInfo = await fetchEbayUserInfo(tokens.accessToken, state.environment);
@@ -1140,7 +1167,12 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
             ? userError.message
             : 'Unknown error';
         showWarning(`Could not fetch user info: ${userErrorMsg}`);
-        showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
+        if (userErrorMsg.toLowerCase().includes('access denied')) {
+          showInfo('This is normal if your RuName does not include the commerce.identity.readonly scope.');
+          showInfo('Your OAuth tokens are valid and all other APIs will work correctly.');
+        } else {
+          showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
+        }
       }
 
       // Also get app access token for client credentials flow
@@ -1243,7 +1275,7 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
       state.config.EBAY_USER_REFRESH_TOKEN = tokens.refreshToken;
       state.config.EBAY_USER_ACCESS_TOKEN = tokens.accessToken;
 
-      // Verify setup by fetching user info
+      // Verify setup by fetching user info (optional - requires identity scope)
       console.log('  ' + ui.info('Verifying setup by fetching your eBay account info...'));
       try {
         const userInfo = await fetchEbayUserInfo(tokens.accessToken, state.environment);
@@ -1256,7 +1288,12 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
             ? userError.message
             : 'Unknown error';
         showWarning(`Could not fetch user info: ${userErrorMsg}`);
-        showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
+        if (userErrorMsg.toLowerCase().includes('access denied')) {
+          showInfo('This is normal if your RuName does not include the commerce.identity.readonly scope.');
+          showInfo('Your OAuth tokens are valid and all other APIs will work correctly.');
+        } else {
+          showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
+        }
       }
 
       // Also get app access token for client credentials flow

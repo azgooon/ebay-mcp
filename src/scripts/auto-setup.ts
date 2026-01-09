@@ -17,8 +17,8 @@ import { homedir, platform } from 'os';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 
-// Load environment variables
-config();
+// Load environment variables silently
+config({ quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

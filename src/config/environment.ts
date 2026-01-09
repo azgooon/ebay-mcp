@@ -6,7 +6,8 @@ import type { EbayConfig } from '@/types/ebay.js';
 import type { Implementation } from '@modelcontextprotocol/sdk/types.js';
 import { LocaleEnum } from '@/types/ebay-enums.js';
 
-config();
+// Load .env silently - suppress dotenv output to keep stdout clean for MCP JSON-RPC
+config({ quiet: true });
 
 // Get the current directory for loading scope files
 const __filename = fileURLToPath(import.meta.url);
