@@ -174,16 +174,24 @@ function parseAuthorizationCode(input: string): string | null {
   return null;
 }
 
+interface TokenExchangeResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  refreshTokenExpiresIn: number;
+}
+
 /**
  * Exchange authorization code for tokens using eBay API
+ * This mirrors the logic in auth/oauth.ts EbayOAuthClient.exchangeCodeForToken()
  */
-async function exchangeCodeForTokens(
+async function exchangeAuthorizationCode(
   code: string,
   clientId: string,
   clientSecret: string,
   redirectUri: string,
   environment: 'sandbox' | 'production'
-): Promise<{ refreshToken: string; accessToken: string; expiresIn: number } | null> {
+): Promise<TokenExchangeResult> {
   const tokenUrl =
     environment === 'production'
       ? 'https://api.ebay.com/identity/v1/oauth2/token'
@@ -191,62 +199,60 @@ async function exchangeCodeForTokens(
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-  try {
-    const response = await axios.post(
-      tokenUrl,
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-      }).toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${credentials}`,
-        },
-      }
-    );
-
-    return {
-      refreshToken: response.data.refresh_token,
-      accessToken: response.data.access_token,
-      expiresIn: response.data.expires_in,
-    };
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const errorMsg = error.response?.data?.error_description || error.message;
-      throw new Error(errorMsg);
+  const response = await axios.post(
+    tokenUrl,
+    new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+    }).toString(),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${credentials}`,
+      },
     }
-    throw error;
-  }
+  );
+
+  return {
+    accessToken: response.data.access_token,
+    refreshToken: response.data.refresh_token,
+    expiresIn: response.data.expires_in,
+    refreshTokenExpiresIn: response.data.refresh_token_expires_in,
+  };
 }
 
 /**
- * Validate tokens by getting user info from eBay API
+ * Get app access token using client credentials flow
+ * This mirrors the logic in auth/oauth.ts EbayOAuthClient.getOrRefreshAppAccessToken()
  */
-async function validateTokens(
-  accessToken: string,
+async function getAppAccessToken(
+  clientId: string,
+  clientSecret: string,
   environment: 'sandbox' | 'production'
-): Promise<{ username: string } | null> {
-  const apiUrl =
+): Promise<string> {
+  const tokenUrl =
     environment === 'production'
-      ? 'https://apiz.ebay.com/commerce/identity/v1/user/'
-      : 'https://apiz.sandbox.ebay.com/commerce/identity/v1/user/';
+      ? 'https://api.ebay.com/identity/v1/oauth2/token'
+      : 'https://api.sandbox.ebay.com/identity/v1/oauth2/token';
 
-  try {
-    const response = await axios.get(apiUrl, {
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const response = await axios.post(
+    tokenUrl,
+    new URLSearchParams({
+      grant_type: 'client_credentials',
+      scope: 'https://api.ebay.com/oauth/api_scope',
+    }).toString(),
+    {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${credentials}`,
       },
-    });
+    }
+  );
 
-    return {
-      username: response.data.username || response.data.userId || 'Unknown',
-    };
-  } catch {
-    return null;
-  }
+  return response.data.access_token;
 }
 
 function showInfo(message: string): void {
@@ -688,7 +694,7 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
     console.log('\n  ' + ui.info('Exchanging authorization code for tokens...'));
 
     try {
-      const tokens = await exchangeCodeForTokens(
+      const tokens = await exchangeAuthorizationCode(
         authCode,
         state.config.EBAY_CLIENT_ID,
         state.config.EBAY_CLIENT_SECRET,
@@ -696,33 +702,37 @@ async function stepOAuth(state: SetupState): Promise<boolean> {
         state.environment
       );
 
-      if (!tokens) {
-        showError('Failed to exchange code for tokens.');
-        return true;
-      }
-
       showSuccess('Authorization code exchanged successfully!');
 
-      // Save the refresh token
+      // Store all user tokens in state.config (will be saved to .env by saveConfig)
       state.config.EBAY_USER_REFRESH_TOKEN = tokens.refreshToken;
+      state.config.EBAY_USER_ACCESS_TOKEN = tokens.accessToken;
 
-      // Validate by getting user info
-      console.log('  ' + ui.info('Validating tokens...'));
-
-      const userInfo = await validateTokens(tokens.accessToken, state.environment);
-
-      if (userInfo) {
-        showSuccess(`Connected to eBay account: ${ui.bold(userInfo.username)}`);
-      } else {
-        showSuccess('Tokens obtained successfully!');
-        showWarning('Could not verify user info (this is normal for some sandbox accounts).');
+      // Also get app access token for client credentials flow
+      console.log('  ' + ui.info('Getting app access token...'));
+      try {
+        const appToken = await getAppAccessToken(
+          state.config.EBAY_CLIENT_ID,
+          state.config.EBAY_CLIENT_SECRET,
+          state.environment
+        );
+        state.config.EBAY_APP_ACCESS_TOKEN = appToken;
+        showSuccess('App access token obtained!');
+      } catch {
+        showWarning('Could not get app access token (user tokens will still work).');
       }
 
       console.log('\n  ' + ui.success('✓') + ' OAuth setup complete!');
       console.log(`  ${ui.dim('Access token expires in:')} ${Math.floor(tokens.expiresIn / 60)} minutes`);
-      console.log(`  ${ui.dim('Refresh token will be saved to .env')}\n`);
+      console.log(`  ${ui.dim('Refresh token expires in:')} ${Math.floor(tokens.refreshTokenExpiresIn / 60 / 60 / 24)} days`);
+      console.log(`  ${ui.dim('All tokens will be saved to .env')}\n`);
     } catch (error) {
-      showError(`Failed to exchange code: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = axios.isAxiosError(error)
+        ? error.response?.data?.error_description || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error';
+      showError(`Failed to exchange code: ${errorMsg}`);
       console.log('\n  ' + ui.dim('Common issues:'));
       console.log('  • Authorization code expired (codes are valid for ~5 minutes)');
       console.log('  • Code was already used (each code can only be used once)');
