@@ -11,8 +11,11 @@ import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import prompts from 'prompts';
 import { getDefaultScopes } from '../config/environment.js';
+import { checkForUpdates } from '../utils/version.js';
 
 config({ quiet: true });
+
+checkForUpdates();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1168,7 +1171,9 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
             : 'Unknown error';
         showWarning(`Could not fetch user info: ${userErrorMsg}`);
         if (userErrorMsg.toLowerCase().includes('access denied')) {
-          showInfo('This is normal if your RuName does not include the commerce.identity.readonly scope.');
+          showInfo(
+            'This is normal if your RuName does not include the commerce.identity.readonly scope.'
+          );
           showInfo('Your OAuth tokens are valid and all other APIs will work correctly.');
         } else {
           showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');
@@ -1230,7 +1235,9 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
     // Direct code paste - user already has an authorization code
     console.log('\n  ' + ui.bold('Paste Authorization Code'));
     console.log(
-      ui.dim('  If you already completed OAuth in a browser and have the code from the callback URL.\n')
+      ui.dim(
+        '  If you already completed OAuth in a browser and have the code from the callback URL.\n'
+      )
     );
 
     const codeInput = await prompts({
@@ -1289,7 +1296,9 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
             : 'Unknown error';
         showWarning(`Could not fetch user info: ${userErrorMsg}`);
         if (userErrorMsg.toLowerCase().includes('access denied')) {
-          showInfo('This is normal if your RuName does not include the commerce.identity.readonly scope.');
+          showInfo(
+            'This is normal if your RuName does not include the commerce.identity.readonly scope.'
+          );
           showInfo('Your OAuth tokens are valid and all other APIs will work correctly.');
         } else {
           showInfo('OAuth tokens were saved successfully. You can still use the MCP server.');

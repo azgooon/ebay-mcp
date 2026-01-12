@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import type { EbayConfig } from '@/types/ebay.js';
 import type { Implementation } from '@modelcontextprotocol/sdk/types.js';
 import { LocaleEnum } from '@/types/ebay-enums.js';
+import { getVersion } from '@/utils/version.js';
 
 // Load .env silently - suppress dotenv output to keep stdout clean for MCP JSON-RPC
 config({ quiet: true });
@@ -348,9 +349,9 @@ export function getOAuthAuthorizationUrl(
 
 export const mcpConfig: Implementation = {
   name: 'eBay API Model Context Protocol Server',
-  version: '1.4.2',
+  version: getVersion(),
   title: 'eBay API Model Context Protocol Server',
-  websiteUrl: 'https://github.com/ebay/ebay-mcp-server',
+  websiteUrl: 'https://github.com/YosefHayim/ebay-mcp',
   icons: [
     {
       src: './48x48.png',

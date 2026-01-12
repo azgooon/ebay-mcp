@@ -1,6 +1,6 @@
 {
   "name": "ebay-mcp",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Local MCP server for eBay APIs - provides access to eBay developer functionality through MCP (Model Context Protocol)",
   "type": "module",
   "main": "build/index.js",
@@ -63,6 +63,7 @@
     "jose": "^6.1.2",
     "jsonwebtoken": "^9.0.2",
     "prompts": "^2.4.2",
+    "update-notifier": "^7.3.1",
     "winston": "^3.19.0",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.24.1"
@@ -75,6 +76,7 @@
     "@types/node": "^24.10.1",
     "@types/prompts": "^2.4.9",
     "@types/supertest": "^6.0.3",
+    "@types/update-notifier": "^6.0.8",
     "@vitest/coverage-v8": "^4.0.13",
     "@vitest/ui": "^4.0.8",
     "eslint": "^9.39.1",

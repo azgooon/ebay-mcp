@@ -26,6 +26,7 @@ import { getToolDefinitions, executeTool } from '@/tools/index.js';
 import { TokenVerifier } from '@/auth/token-verifier.js';
 import { createBearerAuthMiddleware } from '@/auth/oauth-middleware.js';
 import { createMetadataRouter, getProtectedResourceMetadataUrl } from '@/auth/oauth-metadata.js';
+import { getVersion } from '@/utils/version.js';
 
 // Configuration from environment
 const CONFIG = {
@@ -178,9 +179,9 @@ async function createApp(): Promise<express.Application> {
 
     const server = new McpServer({
       name: 'ebay-mcp',
-      version: '1.4.0',
+      version: getVersion(),
       title: 'eBay API MCP Server',
-      websiteUrl: 'https://coming-soon.com',
+      websiteUrl: 'https://github.com/YosefHayim/ebay-mcp',
       icons: [
         {
           src: './icons/16x16.png',

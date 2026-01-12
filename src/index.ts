@@ -5,6 +5,9 @@ import { EbaySellerApi } from '@/api/index.js';
 import { getEbayConfig, mcpConfig, validateEnvironmentConfig } from '@/config/environment.js';
 import { getToolDefinitions, executeTool } from '@/tools/index.js';
 import { serverLogger, toolLogger, getLogPaths } from '@/utils/logger.js';
+import { checkForUpdates } from '@/utils/version.js';
+
+checkForUpdates({ defer: true });
 
 /**
  * eBay API MCP Server
