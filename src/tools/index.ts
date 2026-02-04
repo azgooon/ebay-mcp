@@ -15,6 +15,7 @@ import {
   type ToolDefinition,
 } from '@/tools/definitions/index.js';
 import { chatGptTools } from '@/tools/tool-definitions.js';
+import { getApiStatusFeed } from '@/utils/api-status-feed.js';
 import { convertToTimestamp, validateTokenExpiry } from '@/utils/date-converter.js';
 
 // Import Zod schemas for input validation
@@ -1863,6 +1864,16 @@ export async function executeTool(
           },
         ],
       };
+
+    // Developer API - API Status (public RSS feed)
+    case 'ebay_get_api_status': {
+      const result = await getApiStatusFeed({
+        limit: args.limit as number | undefined,
+        status: args.status as 'Resolved' | 'Unresolved' | undefined,
+        api: args.api as string | undefined,
+      });
+      return { items: result.items, ...(result.error && { error: result.error }) };
+    }
 
     // Developer API - Rate Limits
     case 'ebay_get_rate_limits':

@@ -564,7 +564,7 @@ Log files are stored in `~/.ebay-mcp/logs/`:
 
 1. Verify you're using the correct environment (sandbox vs production)
 2. Ensure you have proper permissions/scopes for the operation
-3. Check eBay API status: https://developer.ebay.com/support/api-status
+3. Check current API status with the `ebay_get_api_status` tool or the [eBay API Status](https://developer.ebay.com/support/api-status) page
 4. Run `npm run diagnose` to check your configuration
 5. Review the [eBay API documentation](https://developer.ebay.com/docs) for endpoint requirements
 
@@ -602,12 +602,20 @@ If you're still experiencing issues:
 
 ## Resources
 
+### API Status
+
+Check current eBay API health, incidents, and fixes:
+
+- [eBay API Status](https://developer.ebay.com/support/api-status) - Official status page
+- [API Status RSS feed](https://developer.ebay.com/rss/api-status) - Latest issues and resolutions (XML)
+- **`ebay_get_api_status`** - MCP tool that returns the latest items from this feed (filter by status or API name, optional limit)
+- [Latest snapshot (auto-updated)](docs/API_STATUS.md) - In-repo digest of recent status items
+
 ### Documentation
 
 - [eBay Developer Portal](https://developer.ebay.com/) - API documentation and credentials
 - [eBay API License Agreement](https://developer.ebay.com/join/api-license-agreement) - Terms of use and compliance requirements
 - [eBay Data Handling Requirements](https://developer.ebay.com/api-docs/static/data-handling-update.html) - Important data protection and privacy guidelines
-- [eBay API Status](https://developer.ebay.com/support/api-status) - Real-time API health and status
 - [MCP Documentation](https://modelcontextprotocol.io/) - Model Context Protocol specification
 - [OAuth Quick Reference](docs/auth/OAUTH_QUICK_REFERENCE.md) - **Complete OAuth authentication guide with scopes, troubleshooting, and examples**
 - [OAuth Setup Guide](docs/auth/) - Detailed authentication configuration
