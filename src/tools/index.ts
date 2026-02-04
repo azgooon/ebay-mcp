@@ -14,6 +14,7 @@ import {
   tokenManagementTools,
   type ToolDefinition,
 } from '@/tools/definitions/index.js';
+import { chatGptTools } from '@/tools/tool-definitions.js';
 import { convertToTimestamp, validateTokenExpiry } from '@/utils/date-converter.js';
 
 // Import Zod schemas for input validation
@@ -58,17 +59,17 @@ import {
   updateDestinationSchema,
   updateSubscriptionSchema,
 } from '@/utils/communication/notification.js';
-import { type components } from '@/types/sell-apps/listing-management/sellInventoryV1Oas3.js';
-
 export type { ToolDefinition };
-
-type InventoryItem = components['schemas']['InventoryItem'];
 
 /**
  * Get all tool definitions for the MCP server
  */
 export function getToolDefinitions(): ToolDefinition[] {
+  const chatConnectorTools = chatGptTools.filter(
+    (tool) => tool.name === 'search' || tool.name === 'fetch'
+  );
   return [
+    ...chatConnectorTools,
     ...tokenManagementTools,
     ...accountTools,
     ...inventoryTools,
@@ -96,15 +97,56 @@ export async function executeTool(
     case 'search': {
       // For this example, we'll treat the query as a search for inventory items.
       // A more robust implementation might search across different types of content.
-      const response = await api.inventory.getInventoryItems((args.limit as number) ?? 10);
-      const results =
-        response.inventoryItems?.map((item: InventoryItem, index: number) => ({
-          id: `item-${index}`,
-          title: item.product?.title ?? 'No Title',
-          // The URL should be a canonical link to the item, which we don't have here.
-          // We'll use a placeholder.
-          url: `https://www.ebay.com/`, // Placeholder URL
-        })) ?? [];
+      const requestedLimitRaw = args.limit as number | undefined;
+      const limit =
+        typeof requestedLimitRaw === 'number' && Number.isFinite(requestedLimitRaw)
+          ? Math.max(Math.floor(requestedLimitRaw), 1)
+          : 10;
+      const query = (args.query as string | undefined)?.toLowerCase().trim();
+      const pageSize = query ? Math.min(Math.max(limit, 50), 200) : limit;
+      const matches: {
+        product?: { title?: string };
+        sku: string;
+      }[] = [];
+      let offset = 0;
+
+      while (matches.length < limit) {
+        const response = await api.inventory.getInventoryItems(pageSize, offset);
+        const pageItems = response.inventoryItems ?? [];
+        if (pageItems.length === 0) {
+          break;
+        }
+
+        // Filter to only include items with valid SKUs (required for getInventoryItem calls)
+        const itemsWithSku = pageItems.filter(
+          (item): item is typeof item & { sku: string } =>
+            typeof item.sku === 'string' && item.sku.trim() !== ''
+        );
+
+        const filtered = query
+          ? itemsWithSku.filter((item) => (item.product?.title ?? '').toLowerCase().includes(query))
+          : itemsWithSku;
+
+        matches.push(...filtered);
+        offset += pageSize;
+
+        const total = (response as { total?: number }).total;
+        if (typeof total === 'number' && offset >= total) {
+          break;
+        }
+
+        if (!query || pageItems.length < pageSize) {
+          break;
+        }
+      }
+
+      const results = matches.slice(0, limit).map((item) => ({
+        id: item.sku,
+        title: item.product?.title ?? 'No Title',
+        // The URL should be a canonical link to the item, which we don't have here.
+        // We'll use a placeholder.
+        url: `https://www.ebay.com/`, // Placeholder URL
+      }));
 
       // Format the response as required by the ChatGPT connector spec.
       return {
@@ -319,7 +361,7 @@ export async function executeTool(
         }
 
         // Set tokens (will use defaults if expiry times not provided)
-        await api.setUserTokens(accessToken, refreshToken);
+        await api.setUserTokens(accessToken, refreshToken, accessExpiry, refreshExpiry);
 
         // If autoRefresh is enabled, attempt to get a fresh access token
         // (The OAuth client will handle refresh internally if needed)
@@ -828,15 +870,9 @@ export async function executeTool(
         args.returnAddress as Record<string, unknown> | undefined
       );
     case 'ebay_add_payment_dispute_evidence':
-      return await api.dispute.addEvidence(
-        args.paymentDisputeId as string,
-        args as Record<string, unknown>
-      );
+      return await api.dispute.addEvidence(args.paymentDisputeId as string, args);
     case 'ebay_update_payment_dispute_evidence':
-      return await api.dispute.updateEvidence(
-        args.paymentDisputeId as string,
-        args as Record<string, unknown>
-      );
+      return await api.dispute.updateEvidence(args.paymentDisputeId as string, args);
     case 'ebay_upload_payment_dispute_evidence_file':
       return await api.dispute.uploadEvidenceFile(
         args.paymentDisputeId as string,

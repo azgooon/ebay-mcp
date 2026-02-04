@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir, platform } from 'os';
 
@@ -1593,7 +1593,15 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-main().catch((error) => {
-  console.error(ui.error('\n  Setup failed:'), error);
-  process.exit(1);
-});
+export async function runSetup(): Promise<void> {
+  await main();
+}
+
+const entryPath = process.argv[1] ? resolve(process.argv[1]) : undefined;
+const modulePath = resolve(fileURLToPath(import.meta.url));
+if (entryPath && modulePath === entryPath) {
+  runSetup().catch((error) => {
+    console.error(ui.error('\n  Setup failed:'), error);
+    process.exit(1);
+  });
+}

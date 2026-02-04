@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getAuthUrl, getBaseUrl, getDefaultScopes } from '@/config/environment.js';
+import { getBaseUrl, getDefaultScopes } from '@/config/environment.js';
 import type {
   EbayAppAccessTokenResponse,
   EbayConfig,
@@ -7,17 +7,17 @@ import type {
   StoredTokenData,
 } from '@/types/ebay.js';
 import { LocaleEnum } from '@/types/ebay-enums.js';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { authLogger } from '@/utils/logger.js';
 
 /**
  * Update .env file with new token values
  */
-function updateEnvFile(updates: { [key: string]: string }): void {
+function updateEnvFile(updates: Record<string, string>): void {
   try {
     const envPath = join(process.cwd(), '.env');
-    let envContent = readFileSync(envPath, 'utf-8');
+    let envContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
 
     // Update each key-value pair
     for (const [key, value] of Object.entries(updates)) {
@@ -36,7 +36,7 @@ function updateEnvFile(updates: { [key: string]: string }): void {
 
     writeFileSync(envPath, envContent, 'utf-8');
     // Tokens updated silently - console output interferes with MCP JSON protocol
-  } catch (error) {
+  } catch (_error) {
     // Silent failure - error logging interferes with MCP JSON protocol
     // If needed, check .env file manually
   }
@@ -206,7 +206,7 @@ export class EbayOAuthClient {
    */
   async getOrRefreshAppAccessToken(): Promise<string> {
     // Return cached token if still valid
-    if (this.appAccessToken) {
+    if (this.appAccessToken && Date.now() < this.appAccessTokenExpiry) {
       return this.appAccessToken;
     }
 
@@ -365,7 +365,7 @@ export class EbayOAuthClient {
       };
 
       // Update .env file with new tokens
-      const envUpdates: { [key: string]: string } = {
+      const envUpdates: Record<string, string> = {
         EBAY_USER_ACCESS_TOKEN: tokenData.access_token,
       };
 

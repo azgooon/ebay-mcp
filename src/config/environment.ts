@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import type { EbayConfig } from '@/types/ebay.js';
@@ -73,7 +73,20 @@ function getSandboxScopes(): string[] {
  * Get default scopes for the specified environment
  */
 export function getDefaultScopes(environment: 'production' | 'sandbox'): string[] {
-  return environment === 'production' ? getProductionScopes() : getSandboxScopes();
+  if (environment === 'production') {
+    return getProductionScopes();
+  }
+
+  const sandboxScopes = getSandboxScopes();
+  const productionScopes = getProductionScopes();
+  const productionWithoutEdelivery = productionScopes.filter(
+    (scope) => scope !== 'https://api.ebay.com/oauth/scope/sell.edelivery'
+  );
+
+  const mergedScopes = new Set([...sandboxScopes, ...productionWithoutEdelivery]);
+  mergedScopes.add('https://api.ebay.com/oauth/api_scope/sell.edelivery');
+  mergedScopes.add('https://api.ebay.com/oauth/scope/sell.edelivery');
+  return Array.from(mergedScopes);
 }
 
 /**
@@ -249,8 +262,8 @@ export function getAuthUrl(
   scopes?: string[]
 ): string;
 export function getAuthUrl(
-  clientIdOrEnvironment: string | 'production' | 'sandbox',
-  redirectUri?: string | undefined,
+  clientIdOrEnvironment: string,
+  redirectUri?: string,
   environment?: 'production' | 'sandbox',
   locale: LocaleEnum = LocaleEnum.en_US,
   prompt: 'login' | 'consent' = 'login',
@@ -267,8 +280,8 @@ export function getAuthUrl(
   }
 
   // Otherwise, generate the full OAuth authorization URL
-  const clientId = clientIdOrEnvironment as string;
-  const env = environment || 'sandbox';
+  const clientId = clientIdOrEnvironment;
+  const env = environment ?? 'sandbox';
   const scope = getDefaultScopes(env);
 
   if (!(clientId && redirectUri)) {
@@ -347,6 +360,17 @@ export function getOAuthAuthorizationUrl(
   return `${signinDomain}/signin?ru=${ruParam}&sgfl=oauth2_login&AppName=${clientId}`;
 }
 
+const iconUrl = (size: string): string => {
+  const url = new URL(`../../public/icons/${size}.png`, import.meta.url);
+  const path = fileURLToPath(url);
+  if (!existsSync(path)) {
+    console.warn(
+      `[eBay MCP] Icon not found at ${path}. Ensure public/icons is included in the package.`
+    );
+  }
+  return url.toString();
+};
+
 export const mcpConfig: Implementation = {
   name: 'eBay API Model Context Protocol Server',
   version: getVersion(),
@@ -354,27 +378,37 @@ export const mcpConfig: Implementation = {
   websiteUrl: 'https://github.com/YosefHayim/ebay-mcp',
   icons: [
     {
-      src: './48x48.png',
+      src: iconUrl('16x16'),
+      mimeType: 'image/png',
+      sizes: ['16x16'],
+    },
+    {
+      src: iconUrl('32x32'),
+      mimeType: 'image/png',
+      sizes: ['32x32'],
+    },
+    {
+      src: iconUrl('48x48'),
       mimeType: 'image/png',
       sizes: ['48x48'],
     },
     {
-      src: './128x128.png',
+      src: iconUrl('128x128'),
       mimeType: 'image/png',
       sizes: ['128x128'],
     },
     {
-      src: './256x256.png',
+      src: iconUrl('256x256'),
       mimeType: 'image/png',
       sizes: ['256x256'],
     },
     {
-      src: './512x512.png',
+      src: iconUrl('512x512'),
       mimeType: 'image/png',
       sizes: ['512x512'],
     },
     {
-      src: './1024x1024.png',
+      src: iconUrl('1024x1024'),
       mimeType: 'image/png',
       sizes: ['1024x1024'],
     },

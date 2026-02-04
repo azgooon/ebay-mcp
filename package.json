@@ -42,6 +42,7 @@
     "build/**/*.js",
     "build/index.d.ts",
     "build/server-http.d.ts",
+    "public/icons/*.png",
     "README.md"
   ],
   "repository": {
