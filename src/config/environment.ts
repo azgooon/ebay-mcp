@@ -291,9 +291,11 @@ export function getAuthUrl(
     return '';
   }
 
-  const authDomain =
-    env === 'production' ? 'https://auth.ebay.com' : 'https://auth.sandbox.ebay.com';
-  const params = new URLSearchParams({
+  // Build consent URL with auth2 endpoint (eBay's OAuth consent endpoint)
+  const consentDomain =
+    env === 'production' ? 'https://auth2.ebay.com' : 'https://auth2.sandbox.ebay.com';
+
+  const consentParams = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: responseType,
@@ -303,7 +305,13 @@ export function getAuthUrl(
     ...(state ? { state } : {}),
   });
 
-  return `${authDomain}/oauth2/authorize?${params.toString()}`;
+  const consentUrl = `${consentDomain}/oauth2/consents?${consentParams.toString()}`;
+
+  // Build signin URL that redirects to consent
+  const signinDomain =
+    env === 'production' ? 'https://signin.ebay.com' : 'https://signin.sandbox.ebay.com';
+
+  return `${signinDomain}/signin?ru=${encodeURIComponent(consentUrl)}&sgfl=oauth2&AppName=${encodeURIComponent(clientId)}`;
 }
 
 /**

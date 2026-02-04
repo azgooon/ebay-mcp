@@ -116,14 +116,18 @@ describe('Environment Configuration', () => {
   describe('getAuthUrl', () => {
     it('should return production auth URL for production environment', () => {
       const url = getAuthUrl('test_client_id', 'https://localhost/callback', 'production');
-      expect(url).toContain('https://auth.ebay.com/oauth2/authorize');
-      expect(url).toContain('client_id=test_client_id');
+      expect(url).toContain('https://signin.ebay.com/signin?ru=');
+      expect(url).toContain('auth2.ebay.com');
+      expect(url).toContain('oauth2%2Fconsents');
+      expect(url).toContain('client_id');
     });
 
     it('should return sandbox auth URL for sandbox environment', () => {
       const url = getAuthUrl('test_client_id', 'https://localhost/callback', 'sandbox');
-      expect(url).toContain('https://auth.sandbox.ebay.com/oauth2/authorize');
-      expect(url).toContain('client_id=test_client_id');
+      expect(url).toContain('https://signin.sandbox.ebay.com/signin?ru=');
+      expect(url).toContain('auth2.sandbox.ebay.com');
+      expect(url).toContain('oauth2%2Fconsents');
+      expect(url).toContain('client_id');
     });
   });
 

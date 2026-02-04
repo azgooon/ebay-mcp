@@ -1084,15 +1084,32 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
       }
     }
   } else if (tokenChoice.method === 'manual') {
-    const baseUrl =
+    // Build the OAuth consent URL (auth2 endpoint)
+    const consentDomain =
       state.environment === 'production'
-        ? 'https://auth.ebay.com/oauth2/authorize'
-        : 'https://auth.sandbox.ebay.com/oauth2/authorize';
+        ? 'https://auth2.ebay.com'
+        : 'https://auth2.sandbox.ebay.com';
 
     // Get scopes from environment config
     const scopes = getDefaultScopes(state.environment);
-    const scopeParam = encodeURIComponent(scopes.join(' '));
-    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}&redirect_uri=${encodeURIComponent(state.config.EBAY_REDIRECT_URI)}&response_type=code&scope=${scopeParam}`;
+
+    // Build the consent URL parameters
+    const consentParams = new URLSearchParams({
+      client_id: state.config.EBAY_CLIENT_ID,
+      redirect_uri: state.config.EBAY_REDIRECT_URI,
+      response_type: 'code',
+      scope: scopes.join(' '),
+    });
+
+    const consentUrl = `${consentDomain}/oauth2/consents?${consentParams.toString()}`;
+
+    // Build the signin URL that redirects to consent
+    const signinDomain =
+      state.environment === 'production'
+        ? 'https://signin.ebay.com'
+        : 'https://signin.sandbox.ebay.com';
+
+    const authUrl = `${signinDomain}/signin?ru=${encodeURIComponent(consentUrl)}&sgfl=oauth2&AppName=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}`;
 
     console.log('\n  ' + ui.bold('OAuth Authorization URL:'));
     console.log(ui.dim('  ' + '─'.repeat(56)));
