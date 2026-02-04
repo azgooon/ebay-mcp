@@ -7,7 +7,7 @@ import type {
   StoredTokenData,
 } from '@/types/ebay.js';
 import { LocaleEnum } from '@/types/ebay-enums.js';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { authLogger } from '@/utils/logger.js';
 
@@ -17,7 +17,7 @@ import { authLogger } from '@/utils/logger.js';
 function updateEnvFile(updates: { [key: string]: string }): void {
   try {
     const envPath = join(process.cwd(), '.env');
-    let envContent = readFileSync(envPath, 'utf-8');
+    let envContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
 
     // Update each key-value pair
     for (const [key, value] of Object.entries(updates)) {

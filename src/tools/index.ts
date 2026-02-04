@@ -14,6 +14,7 @@ import {
   tokenManagementTools,
   type ToolDefinition,
 } from '@/tools/definitions/index.js';
+import { chatGptTools } from '@/tools/tool-definitions.js';
 import { convertToTimestamp, validateTokenExpiry } from '@/utils/date-converter.js';
 
 // Import Zod schemas for input validation
@@ -68,7 +69,11 @@ type InventoryItem = components['schemas']['InventoryItem'];
  * Get all tool definitions for the MCP server
  */
 export function getToolDefinitions(): ToolDefinition[] {
+  const chatConnectorTools = chatGptTools.filter(
+    (tool) => tool.name === 'search' || tool.name === 'fetch'
+  );
   return [
+    ...chatConnectorTools,
     ...tokenManagementTools,
     ...accountTools,
     ...inventoryTools,
@@ -96,15 +101,22 @@ export async function executeTool(
     case 'search': {
       // For this example, we'll treat the query as a search for inventory items.
       // A more robust implementation might search across different types of content.
-      const response = await api.inventory.getInventoryItems((args.limit as number) ?? 10);
-      const results =
-        response.inventoryItems?.map((item: InventoryItem, index: number) => ({
-          id: `item-${index}`,
-          title: item.product?.title ?? 'No Title',
-          // The URL should be a canonical link to the item, which we don't have here.
-          // We'll use a placeholder.
-          url: `https://www.ebay.com/`, // Placeholder URL
-        })) ?? [];
+      const limit = (args.limit as number) ?? 10;
+      const query = (args.query as string | undefined)?.toLowerCase().trim();
+      const response = await api.inventory.getInventoryItems(limit);
+      let items = response.inventoryItems ?? [];
+      if (query) {
+        items = items.filter((item) =>
+          (item.product?.title ?? '').toLowerCase().includes(query)
+        );
+      }
+      const results = items.map((item: InventoryItem, index: number) => ({
+        id: `item-${index}`,
+        title: item.product?.title ?? 'No Title',
+        // The URL should be a canonical link to the item, which we don't have here.
+        // We'll use a placeholder.
+        url: `https://www.ebay.com/`, // Placeholder URL
+      }));
 
       // Format the response as required by the ChatGPT connector spec.
       return {

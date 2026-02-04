@@ -11,7 +11,7 @@
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/yosefhayim-ebay-api-mcp-server-badge.png)](https://mseep.ai/app/yosefhayim-ebay-api-mcp-server)
 <a href="https://www.buymeacoffee.com/yosefhayim" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server providing AI assistants with comprehensive access to eBay's Sell APIs. Includes **387 tools** for inventory management, order fulfillment, marketing campaigns, analytics, developer tools, and more.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server providing AI assistants with comprehensive access to eBay's Sell APIs. Includes **300+ tools** for inventory management, order fulfillment, marketing campaigns, analytics, developer tools, and more.
 
 **API Coverage:** 100% (270 unique eBay API endpoints)
 
@@ -260,7 +260,7 @@ This server supports **9 AI clients** with auto-configuration via `npm run setup
 
 ```bash
 npm install -g ebay-mcp
-npx ebay-mcp  # Interactive setup wizard - auto-detects installed clients
+npx ebay-mcp setup  # Interactive setup wizard - auto-detects installed clients
 ```
 
 The setup wizard will automatically detect which AI clients you have installed and configure them for you.

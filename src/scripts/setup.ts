@@ -1593,7 +1593,13 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-main().catch((error) => {
-  console.error(ui.error('\n  Setup failed:'), error);
-  process.exit(1);
-});
+export async function runSetup(): Promise<void> {
+  await main();
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runSetup().catch((error) => {
+    console.error(ui.error('\n  Setup failed:'), error);
+    process.exit(1);
+  });
+}

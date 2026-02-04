@@ -9,6 +9,13 @@ import { checkForUpdates } from '@/utils/version.js';
 
 checkForUpdates({ defer: true });
 
+const args = process.argv.slice(2);
+if (args.includes('setup')) {
+  const { runSetup } = await import('./scripts/setup.js');
+  await runSetup();
+  process.exit(0);
+}
+
 /**
  * eBay API MCP Server
  * Provides access to eBay APIs through Model Context Protocol

@@ -347,6 +347,9 @@ export function getOAuthAuthorizationUrl(
   return `${signinDomain}/signin?ru=${ruParam}&sgfl=oauth2_login&AppName=${clientId}`;
 }
 
+const iconUrl = (size: string): string =>
+  new URL(`../../public/icons/${size}.png`, import.meta.url).toString();
+
 export const mcpConfig: Implementation = {
   name: 'eBay API Model Context Protocol Server',
   version: getVersion(),
@@ -354,27 +357,27 @@ export const mcpConfig: Implementation = {
   websiteUrl: 'https://github.com/YosefHayim/ebay-mcp',
   icons: [
     {
-      src: './48x48.png',
+      src: iconUrl('48x48'),
       mimeType: 'image/png',
       sizes: ['48x48'],
     },
     {
-      src: './128x128.png',
+      src: iconUrl('128x128'),
       mimeType: 'image/png',
       sizes: ['128x128'],
     },
     {
-      src: './256x256.png',
+      src: iconUrl('256x256'),
       mimeType: 'image/png',
       sizes: ['256x256'],
     },
     {
-      src: './512x512.png',
+      src: iconUrl('512x512'),
       mimeType: 'image/png',
       sizes: ['512x512'],
     },
     {
-      src: './1024x1024.png',
+      src: iconUrl('1024x1024'),
       mimeType: 'image/png',
       sizes: ['1024x1024'],
     },

@@ -245,9 +245,9 @@ export class EbayApiClient {
    * Validate that access token is available before making API request
    */
   private validateAccessToken(): void {
-    if (!this.authClient.hasUserTokens()) {
+    if (!this.config.clientId || !this.config.clientSecret) {
       throw new Error(
-        'Access token is missing. Please provide your access token and refresh token by calling ebay_set_user_tokens tool in order to perform API requests.'
+        'Missing required eBay credentials. Please set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET in your .env file.'
       );
     }
   }
