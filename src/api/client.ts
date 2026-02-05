@@ -83,6 +83,14 @@ export class EbayApiClient {
         const token = await this.authClient.getAccessToken();
         config.headers.Authorization = `Bearer ${token}`;
 
+        // Add marketplace headers if configured
+        if (this.config.marketplace) {
+          config.headers['X-EBAY-C-MARKETPLACE-ID'] = this.config.marketplace;
+        }
+        if (this.config.contentLanguage) {
+          config.headers['Content-Language'] = this.config.contentLanguage;
+        }
+
         // Record the request
         this.rateLimitTracker.recordRequest();
 

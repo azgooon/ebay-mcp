@@ -9,6 +9,8 @@ export interface EbayConfig {
   clientSecret: string;
   redirectUri?: string;
   locale?: LocaleEnum;
+  marketplace?: string; // e.g., EBAY_GB, EBAY_US, EBAY_DE
+  contentLanguage?: string; // e.g., en-GB, en-US, de-DE
   environment: 'production' | 'sandbox';
   accessToken?: string;
   refreshToken?: string;
