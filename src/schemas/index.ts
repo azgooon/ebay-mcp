@@ -64,7 +64,7 @@ import { getOtherApisJsonSchemas } from './other/other-apis.js';
  *
  * @returns An object containing all JSON schemas organized by API category
  */
-export function getAllJsonSchemas() {
+export function getAllJsonSchemas(): Record<string, unknown> {
   return {
     accountManagement: getAccountManagementJsonSchemas(),
     inventoryManagement: getInventoryManagementJsonSchemas(),

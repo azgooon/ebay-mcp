@@ -726,6 +726,8 @@ function saveConfig(envConfig: Record<string, string>, environment: string): voi
   const envPath = join(PROJECT_ROOT, '.env');
   const now = new Date();
 
+  // Note: Token values must be quoted because they contain # characters
+  // which would otherwise be interpreted as comments by dotenv
   const content = `# eBay MCP Server Configuration
 # Last Updated: ${formatDate(now)}
 # Environment: ${environment}
@@ -735,9 +737,9 @@ EBAY_CLIENT_SECRET=${envConfig.EBAY_CLIENT_SECRET || ''}
 EBAY_REDIRECT_URI=${envConfig.EBAY_REDIRECT_URI || ''}
 EBAY_ENVIRONMENT=${environment}
 
-EBAY_USER_REFRESH_TOKEN=${envConfig.EBAY_USER_REFRESH_TOKEN || ''}
-EBAY_USER_ACCESS_TOKEN=${envConfig.EBAY_USER_ACCESS_TOKEN || ''}
-EBAY_APP_ACCESS_TOKEN=${envConfig.EBAY_APP_ACCESS_TOKEN || ''}
+EBAY_USER_REFRESH_TOKEN="${envConfig.EBAY_USER_REFRESH_TOKEN || ''}"
+EBAY_USER_ACCESS_TOKEN="${envConfig.EBAY_USER_ACCESS_TOKEN || ''}"
+EBAY_APP_ACCESS_TOKEN="${envConfig.EBAY_APP_ACCESS_TOKEN || ''}"
 `;
 
   writeFileSync(envPath, content, 'utf-8');
@@ -1084,32 +1086,41 @@ async function stepOAuth(state: SetupState): Promise<StepResult> {
       }
     }
   } else if (tokenChoice.method === 'manual') {
-    // Build the OAuth consent URL (auth2 endpoint)
-    const consentDomain =
+    // Build the OAuth authorize URL (auth2 endpoint)
+    const authDomain =
       state.environment === 'production'
         ? 'https://auth2.ebay.com'
         : 'https://auth2.sandbox.ebay.com';
 
-    // Get scopes from environment config
-    const scopes = getDefaultScopes(state.environment);
+    // Core scopes needed for the MCP server
+    const scopes = [
+      'https://api.ebay.com/oauth/api_scope',
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      'https://api.ebay.com/oauth/api_scope/sell.marketing',
+      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+    ];
 
-    // Build the consent URL parameters
-    const consentParams = new URLSearchParams({
+    // Build the authorize URL parameters
+    const authorizeParams = new URLSearchParams({
       client_id: state.config.EBAY_CLIENT_ID,
       redirect_uri: state.config.EBAY_REDIRECT_URI,
-      response_type: 'code',
       scope: scopes.join(' '),
+      state: '',
+      response_type: 'code',
+      hd: '',
     });
 
-    const consentUrl = `${consentDomain}/oauth2/consents?${consentParams.toString()}`;
+    const authorizeUrl = `${authDomain}/oauth2/authorize?${authorizeParams.toString()}`;
 
-    // Build the signin URL that redirects to consent
+    // Build the signin URL that redirects to authorize
     const signinDomain =
       state.environment === 'production'
         ? 'https://signin.ebay.com'
         : 'https://signin.sandbox.ebay.com';
 
-    const authUrl = `${signinDomain}/signin?ru=${encodeURIComponent(consentUrl)}&sgfl=oauth2&AppName=${encodeURIComponent(state.config.EBAY_CLIENT_ID)}`;
+    const authUrl = `${signinDomain}/signin?ru=${encodeURIComponent(authorizeUrl)}&sgfl=oauth2_login&AppName=${state.config.EBAY_CLIENT_ID}`;
 
     console.log('\n  ' + ui.bold('OAuth Authorization URL:'));
     console.log(ui.dim('  ' + '─'.repeat(56)));

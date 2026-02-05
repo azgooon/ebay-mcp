@@ -8,7 +8,8 @@ import type {
 } from '@/types/ebay.js';
 import { LocaleEnum } from '@/types/ebay-enums.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { authLogger } from '@/utils/logger.js';
 
 /**
@@ -16,14 +17,19 @@ import { authLogger } from '@/utils/logger.js';
  */
 function updateEnvFile(updates: Record<string, string>): void {
   try {
-    const envPath = join(process.cwd(), '.env');
+    // Use path relative to this file's location (same as environment.ts)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const envPath = join(__dirname, '../../.env');
     let envContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
 
     // Update each key-value pair
     for (const [key, value] of Object.entries(updates)) {
-      // Match the key with or without value, handling comments
-      const regex = new RegExp(`^(#\\s*)?${key}=.*$`, 'gm');
-      const newLine = `${key}=${value}`;
+      // Match the key with or without value, handling quotes and comments
+      const regex = new RegExp(`^(#\\s*)?${key}=["']?.*["']?$`, 'gm');
+      // Quote values that contain # to prevent them being treated as comments
+      const quotedValue = value.includes('#') ? `"${value}"` : value;
+      const newLine = `${key}=${quotedValue}`;
 
       if (regex.test(envContent)) {
         // Update existing key (uncomment if needed)
